@@ -1106,6 +1106,9 @@ func TestCLIHelpUsesFinalCommandShape(t *testing.T) {
 					t.Fatalf("help for %v contains %q:\n%s", args, forbidden, help)
 				}
 			}
+			if strings.Join(args, " ") == "service import --help" && strings.Contains(help, "--all") {
+				t.Fatalf("service import help contains --all alias:\n%s", help)
+			}
 		})
 	}
 }

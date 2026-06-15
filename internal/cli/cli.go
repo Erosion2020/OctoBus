@@ -219,7 +219,7 @@ func (c *CLI) serviceImportCommand() *cobra.Command {
 	var name, build string
 	var offline, reinstall, recursive bool
 	cmd := &cobra.Command{
-		Use:   "import SERVICE SOURCE [--name NAME] [--build auto|always|never] [--offline] [--reinstall]",
+		Use:   "import SERVICE SOURCE [--name NAME] [--build auto|always|never] [--offline] [--reinstall]\n  octobus service import --recursive SOURCE [--build auto|always|never] [--offline] [--reinstall]",
 		Short: "Import or update a service package",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if recursive {

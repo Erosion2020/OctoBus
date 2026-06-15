@@ -178,16 +178,16 @@
 
 参考文档：[实施计划阶段 5](docs/plan/recursive-service-import-implementation-plan.md)、[CLI 设计](docs/design/product/cli.md)。
 
-- [ ] 5.1 实现 `octobus service import --recursive SOURCE`
+- [x] 5.1 实现 `octobus service import --recursive SOURCE`
   - 依赖：4.3、2.1。
   - 工作内容：在 `serviceImportCommand` 新增 `--recursive` flag；recursive 模式只接受一个 `SOURCE`，禁止 `--name`，请求体发送 `recursive:true` 且不发送 `service_id`。
   - 可并行子任务：
-    - [ ] 可并行：CLI args 校验实现。
-    - [ ] 可并行：CLI 请求体测试。
-    - [ ] 可并行：help 文案审计，确保不出现 `--id` 或 `--all`。
+    - [x] 可并行：CLI args 校验实现。
+    - [x] 可并行：CLI 请求体测试。
+    - [x] 可并行：help 文案审计，确保不出现 `--id` 或 `--all`。
   - 测试方案：`go test ./internal/cli`。
   - 验收标准：`--recursive --name`、缺 source、多 source 报错清晰；非 recursive `SERVICE SOURCE` 保持兼容。
-  - 完成总结：待完成。
+  - 完成总结：CLI 已支持 `octobus service import --recursive SOURCE`，recursive 模式只接受一个 `SOURCE`，禁止 `--name`，请求体发送 `recursive:true`、`source`、`offline`、`reinstall`、`build`，且不发送 `service_id`/`name`；非 recursive `SERVICE SOURCE` 保持兼容。补充 help usage 展示 recursive 形态，并在 `service import --help` 中审计不出现 `--all` alias；既有 help 测试继续禁止 `--id` 资源定位 flag。验证命令：`go test ./internal/cli`，结果通过。
 
 - [ ] 5.2 更新 services import-check 脚本
   - 依赖：5.1。

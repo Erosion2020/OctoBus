@@ -98,15 +98,15 @@
 
 参考文档：[实施计划阶段 3](docs/plan/recursive-service-import-implementation-plan.md)、[技术方案工作流和失败语义](docs/spec/recursive-service-import-spec.md)。
 
-- [ ] 3.1 抽取单 service import 复用 helper
+- [x] 3.1 抽取单 service import 复用 helper
   - 依赖：2.3。
   - 工作内容：从 `Importer.Import` 抽取 manifest/bin/schema/descriptor 编译、`domain.Service` 组装和 artifact/runtime/descriptor 提交 helper，保持单 service import 行为不变。
   - 可并行子任务：
-    - [ ] 可并行：识别可抽取代码块和最小 helper 边界。
-    - [ ] 可并行：补充单 service import 非回归断言。
+    - [x] 可并行：识别可抽取代码块和最小 helper 边界。
+    - [x] 可并行：补充单 service import 非回归断言。
   - 测试方案：`go test ./internal/packageimport`。
   - 验收标准：单 service import 测试全通过；helper 不引入数据库 schema 变化。
-  - 完成总结：待完成。
+  - 完成总结：已将 `Importer.Import` 中的单 service 流程拆为内部 helper：`validatePreparedService` 负责 manifest/bin/runtime mode 预校验，`prepareServiceRuntime` 负责 runtime 目录和 dependency preparation，`compileServiceDescriptor` 负责 descriptor 编译，`stageServiceCommit` 负责 staging commit 目录组装，`buildImportedService` 负责 `domain.Service` 组装和 schema path 校验，`commitImportedService` 负责 artifact 替换与 store upsert。未改变 public API、store schema 或 artifact layout。补充单 service 非回归断言，确认 `Result.Manifest` 和默认 `ServiceRoot` 仍保持原行为。验证命令：`go test ./internal/packageimport`，结果通过。
 
 - [ ] 3.2 实现 `Importer.ImportRecursive`
   - 依赖：3.1、2.2。

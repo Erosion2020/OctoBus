@@ -31,6 +31,9 @@ func TestImporterImportsDirectoryPackage(t *testing.T) {
 	if res.Service.RuntimeMode != domain.RuntimeModeLongRunning {
 		t.Fatalf("runtime mode=%q", res.Service.RuntimeMode)
 	}
+	if res.Manifest.Name != "echo-wrapper" || res.Service.ServiceRoot != "." {
+		t.Fatalf("single service metadata regressed: result=%+v manifest=%+v", res.Service, res.Manifest)
+	}
 	if res.Service.NodeEntry != filepath.Clean("bin/echo.js") {
 		t.Fatalf("node entry=%q", res.Service.NodeEntry)
 	}

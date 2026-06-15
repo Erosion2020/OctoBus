@@ -213,15 +213,15 @@
 
 参考文档：[实施计划阶段 6](docs/plan/recursive-service-import-implementation-plan.md)、[README.md](README.md)、[README.zh-CN.md](README.zh-CN.md)。
 
-- [ ] 6.1 增加 integration 或 e2e recursive import 场景
+- [x] 6.1 增加 integration 或 e2e recursive import 场景
   - 依赖：5.3。
   - 工作内容：增加 daemon + CLI + store 的 recursive import 场景，导入本地 multi-service fixture 或 services 子集 fixture，并验证 `service list` 输出多个 service。
   - 可并行子任务：
-    - [ ] 可并行：构造 e2e/integration fixture。
-    - [ ] 可并行：实现 `service list` 验证和必要的 artifact metadata 断言。
+    - [x] 可并行：构造 e2e/integration fixture。
+    - [x] 可并行：实现 `service list` 验证和必要的 artifact metadata 断言。
   - 测试方案：`go test ./internal/integration` 或 `go test ./tests/e2e -count=1`，按实际落点执行。
   - 验收标准：测试证明 daemon 路径可用；不依赖用户 `~/.octobus`。
-  - 完成总结：待完成。
+  - 完成总结：已在 `internal/integration` 新增 `TestCLIRecursiveServiceImportListsServices`，通过 httptest admin server、真实 CLI 客户端、真实 store 和本地 multi-service fixture 执行 `service import --recursive --offline --build never <pkg>`；随后通过 CLI `service list` 验证 `alpha-service` 与嵌套 `beta-service` 均出现，并断言 `ServiceRoot`、`NodeEntry` 和 store 中持久化 metadata 一致。验证命令：`go test ./internal/integration`，结果通过。
 
 - [ ] 6.2 补充重启聚合端到端覆盖
   - 依赖：6.1。

@@ -35,6 +35,23 @@ service package 默认使用 `long-running` 运行模式：instance 创建或启
 
 ## 启动 daemon
 
+### 从 npm 安装
+
+OctoBus 以 `@chaitin-ai/octobus` npm package 发布。主 package 会安装一个很小的 Node.js launcher，并通过平台相关的 optional dependencies 拉取匹配的原生 Go binary，例如 `@chaitin-ai/octobus-linux-x64`。
+
+```bash
+npm install -g @chaitin-ai/octobus
+octobus serve
+```
+
+也可以不做全局安装，直接运行：
+
+```bash
+npx @chaitin-ai/octobus serve
+```
+
+npm package 只安装 `octobus` binary。常规 service import 和 runtime 流程仍然需要本机提供 `node`、`npm`、`protoc` 和 `git`，见下方依赖说明。
+
 ### 使用 Docker 运行
 
 Docker 镜像内包含 `octobus` binary，以及常规 service 导入和 instance 启动流程需要的运行时依赖。

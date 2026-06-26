@@ -77,6 +77,10 @@ const services = {
     entryFile: "../huawei__fw-usg6000e/bin/huawei-fw-usg6000e.js",
     serviceModule: "../huawei__fw-usg6000e/src/service.js",
   },
+  "imperva-waf-gateway-v13-6-90": {
+    entryFile: "../imperva__waf-gateway_v13-6-90/bin/imperva-waf-gateway-v13-6-90.js",
+    serviceModule: "../imperva__waf-gateway_v13-6-90/src/service.js",
+  },
   "nsfocus-ads-v4-5-r90-f06": {
     entryFile: "../nsfocus__ads_v4-5-r90-f06/bin/nsfocus-ads-v4-5-r90-f06.js",
     serviceModule: "../nsfocus__ads_v4-5-r90-f06/src/service.js",

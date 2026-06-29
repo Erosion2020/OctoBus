@@ -46,7 +46,21 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/home/restLogin/" && req.method === "GET") {
     const name = url.searchParams.get("name");
     const password = url.searchParams.get("password");
-    if (name === TEST_USER && password) {
+    const ngtosAuth = url.searchParams.get("ngtosAuth");
+    if (!name || !password || !ngtosAuth) {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(JSON.stringify({ result: false, msg: "missing required parameters" }));
+      return;
+    }
+    // Validate password: decrypt AES-128-CBC, compare with TEST_PASS
+    let valid = false;
+    try {
+      const decipher = crypto.createDecipheriv("aes-128-cbc", AES_KEY, AES_IV);
+      decipher.setAutoPadding(true);
+      const decrypted = Buffer.concat([decipher.update(Buffer.from(password, "base64")), decipher.final()]).toString("utf8");
+      valid = (name === TEST_USER && decrypted === TEST_PASS);
+    } catch { valid = false; }
+    if (valid) {
       const sid = crypto.randomBytes(13).toString("hex");
       const authId = crypto.randomBytes(4).toString("hex");
       const tokens = Array.from({ length: 50 }, () => newToken());

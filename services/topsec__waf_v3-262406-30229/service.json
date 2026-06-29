@@ -1,0 +1,89 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "topsec-waf-v3-262406-30229",
+  "displayName": "TopSec WAF v3.262406.30229",
+  "description": "OctoBus package for TopSec WAF v3.262406.30229 — authentication, IP black/white list, server policy, custom security rules, detection engine & rule status query.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/topsec_waf.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "waf.v1.WafAuthService/Login": {
+          "name": "login",
+          "description": "Login to WAF 3.0 and cache the session."
+        },
+        "waf.v1.WafIpGroupService/ShowIpGroups": {
+          "name": "list-ip-groups",
+          "description": "List all IP black/white list groups."
+        },
+        "waf.v1.WafIpGroupService/AddBlackIp": {
+          "name": "block-ip",
+          "description": "Add an IP or subnet to the blacklist. Use --scope global for all servers, or --scope none and --server-policy <name> for a specific site."
+        },
+        "waf.v1.WafIpGroupService/AddWhiteIp": {
+          "name": "allow-ip",
+          "description": "Add an IP or subnet to the whitelist."
+        },
+        "waf.v1.WafIpGroupService/DeleteIpGroup": {
+          "name": "delete-ip-group",
+          "description": "Delete an IP group by name."
+        },
+        "waf.v1.WafServerPolicyService/ShowServerPolicies": {
+          "name": "list-server-policies",
+          "description": "List server policies."
+        },
+        "waf.v1.WafServerPolicyService/AddServerPolicy": {
+          "name": "add-server-policy",
+          "description": "Create a server policy and optionally bind an IP group."
+        },
+        "waf.v1.WafServerPolicyService/ModifyServerPolicy": {
+          "name": "modify-server-policy",
+          "description": "Update a server policy."
+        },
+        "waf.v1.WafServerPolicyService/DeleteServerPolicy": {
+          "name": "delete-server-policy",
+          "description": "Delete a server policy."
+        },
+        "waf.v1.WafCustomPolicyService/ShowCustomPolicies": {
+          "name": "list-custom-policies",
+          "description": "List custom rules under a security policy."
+        },
+        "waf.v1.WafCustomPolicyService/AddCustomPolicy": {
+          "name": "add-custom-policy",
+          "description": "Add a custom rule (IP block, URL filter, header matching). Variables: CLIENT_IP, REQUEST_METHOD, REQUEST_HEADERS, REQUEST_URI_RAW."
+        },
+        "waf.v1.WafCustomPolicyService/ModifyCustomPolicy": {
+          "name": "modify-custom-policy",
+          "description": "Modify a custom rule."
+        },
+        "waf.v1.WafCustomPolicyService/DeleteCustomPolicy": {
+          "name": "delete-custom-policy",
+          "description": "Delete a custom policy rule."
+        },
+        "waf.v1.WafRuleService/ShowDefencePolicy": {
+          "name": "show-defence",
+          "description": "Show which detection engine modules are enabled."
+        },
+        "waf.v1.WafRuleService/ShowRuleActions": {
+          "name": "show-rule-actions",
+          "description": "Show detection engine actions per rule type."
+        },
+        "waf.v1.WafRuleService/ShowBuiltRules": {
+          "name": "list-rules",
+          "description": "List built-in rules. ruleType: built, core, app."
+        },
+        "waf.v1.WafRuleService/SearchBuiltRules": {
+          "name": "search-rules",
+          "description": "Search rules by attack type or keyword."
+        }
+      }
+    }
+  }
+}

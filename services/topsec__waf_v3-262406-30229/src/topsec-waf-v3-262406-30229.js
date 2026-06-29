@@ -170,6 +170,7 @@ async function callWafApi(method, urlPath, commands, wafBaseUrl) {
   try {
     parsed = parseWafResponse(res.body, session.tokens);
   } catch {
+    session.tokens.unshift(token);
     return { success: false, message: "invalid WAF response" };
   }
   parsed._httpStatus = res.status;
@@ -192,10 +193,11 @@ async function login(ctx) {
 
   const encPwd = aesEncrypt(password);
   const encLen = aesEncrypt(String(password.length));
+  const tlsVerify = config.tls_verify === true;
   const url = wafUrl(wafBaseUrl, `/home/restLogin/?name=${encodeURIComponent(username)}&password=${encodeURIComponent(encPwd)}&ngtosAuth=${encodeURIComponent(encLen)}`);
 
   try {
-    const res = await httpsGet(url);
+    const res = await httpsGet(url, undefined, tlsVerify);
     const sid = res.sid || extractSessionId(res.headers?.["set-cookie"]);
     let data;
     try { data = JSON.parse(res.body); } catch {
@@ -453,6 +455,7 @@ async function callSeSecurityApi(method, urlPath, params, wafBaseUrl) {
   try {
     return parseWafResponse(res.body, session.tokens);
   } catch {
+    session.tokens.unshift(token);
     return { success: false, message: "invalid WAF response" };
   }
 }

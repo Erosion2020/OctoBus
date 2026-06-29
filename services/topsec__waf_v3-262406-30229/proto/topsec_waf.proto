@@ -1,0 +1,371 @@
+syntax = "proto3";
+package waf.v1;
+
+// ── Auth ────────────────────────────────────────────────────────────────
+
+service WafAuthService {
+  rpc Login(LoginRequest) returns (LoginResponse);
+}
+
+message LoginRequest {
+  string waf_base_url = 1 [json_name = "wafBaseUrl"];
+}
+
+message LoginResponse {
+  bool success = 1;
+  string session_id = 2 [json_name = "sessionId"];
+  string auth_id = 3 [json_name = "authId"];
+  string secret = 4;
+  repeated string tokens = 5;
+  string message = 6;
+}
+
+// ── IP Black/White List ─────────────────────────────────────────────────
+
+service WafIpGroupService {
+  // List all IP groups, optionally filtered by name.
+  rpc ShowIpGroups(ShowIpGroupsRequest) returns (ShowIpGroupsResponse);
+
+  // Add an IP / subnet to the blacklist.
+  rpc AddBlackIp(AddBlackIpRequest) returns (IpGroupResponse);
+
+  // Add an IP / subnet to the whitelist.
+  rpc AddWhiteIp(AddWhiteIpRequest) returns (IpGroupResponse);
+
+  // Delete an IP group by name.
+  rpc DeleteIpGroup(DeleteIpGroupRequest) returns (IpGroupResponse);
+}
+
+message ShowIpGroupsRequest {
+  string name = 1;
+}
+
+message IpGroupRow {
+  string name = 1;
+  string group_value = 2 [json_name = "groupValue"];
+  string ip_group_members = 3 [json_name = "ipGroupMembers"];
+  string refer_count = 4 [json_name = "referCount"];
+}
+
+message ShowIpGroupsResponse {
+  bool success = 1;
+  int32 total = 2;
+  repeated IpGroupRow rows = 3;
+  string message = 4;
+}
+
+// ── AddBlackIp ──────────────────────────────────────────────────────────
+
+message AddBlackIpRequest {
+  // Unique name for this IP group.
+  string name = 1;
+  // IP address (e.g. "1.2.3.4") or subnet (e.g. "10.0.0.0").
+  string ip = 2;
+  // Subnet mask: 32 (single IP), 24, 16, 8, etc. Defaults to 32.
+  int32 mask = 3;
+  // Scope: "global" (all servers) or "none" (per-server, the default).
+  string scope = 4;
+  // Server policy name. Required when scope = "none".
+  // Use ShowServerPolicies to list available policies, or AddServerPolicy to create one.
+  string server_policy = 5 [json_name = "serverPolicy"];
+}
+
+// ── AddWhiteIp ──────────────────────────────────────────────────────────
+
+message AddWhiteIpRequest {
+  string name = 1;
+  string ip = 2;
+  int32 mask = 3;
+  string scope = 4;
+  string server_policy = 5 [json_name = "serverPolicy"];
+}
+
+// ── Delete ──────────────────────────────────────────────────────────────
+
+message DeleteIpGroupRequest {
+  string name = 1;
+}
+
+message IpGroupResponse {
+  bool success = 1;
+  string data = 2;
+  string message = 3;
+}
+
+// ── Server Policy ───────────────────────────────────────────────────────
+//
+// For non-global IP groups, bind them to a server policy.
+// Use ShowServerPolicies to list existing policies.
+// Use AddServerPolicy to create a new one and bind the IP group.
+// ─────────────────────────────────────────────────────────────────────────
+
+service WafServerPolicyService {
+  // List server policies. Use name to filter, or omit to see all.
+  rpc ShowServerPolicies(ShowServerPoliciesRequest) returns (ShowServerPoliciesResponse);
+
+  // Create a server policy, optionally binding an IP group.
+  rpc AddServerPolicy(AddServerPolicyRequest) returns (ServerPolicyResponse);
+
+  // Update a server policy's ip_group binding.
+  rpc ModifyServerPolicy(ModifyServerPolicyRequest) returns (ServerPolicyResponse);
+
+  // Delete a server policy.
+  rpc DeleteServerPolicy(DeleteServerPolicyRequest) returns (ServerPolicyResponse);
+}
+
+message ShowServerPoliciesRequest {
+  string name = 1;
+}
+
+message ServerPolicyRow {
+  string name = 1;
+  string enable = 2;
+  string mode = 3;
+  string security_policy = 4 [json_name = "securityPolicy"];
+  repeated string ip_group = 5 [json_name = "ipGroup"];
+  string server_environment = 6 [json_name = "serverEnvironment"];
+}
+
+message ShowServerPoliciesResponse {
+  bool success = 1;
+  int32 total = 2;
+  repeated ServerPolicyRow rows = 3;
+  string message = 4;
+}
+
+message AddServerPolicyRequest {
+  // Policy name (required).
+  string name = 1;
+  // "on" or "off". Defaults to "on".
+  string enable = 2;
+  // "on" or "off". Traffic logging.
+  string traffic_log = 3 [json_name = "trafficLog"];
+  // "disable", "enable", or "detection". Defaults to "enable".
+  string mode = 4;
+  // Security policy name (required).
+  string security_policy = 5 [json_name = "securityPolicy"];
+  // IP group name to bind (for non-global groups).
+  string ip_group = 6 [json_name = "ipGroup"];
+  // Server environment. Defaults to "default_env".
+  string server_environment = 7 [json_name = "serverEnvironment"];
+}
+
+message ModifyServerPolicyRequest {
+  string name = 1;
+  optional string enable = 2;
+  optional string traffic_log = 3 [json_name = "trafficLog"];
+  optional string mode = 4;
+  optional string security_policy = 5 [json_name = "securityPolicy"];
+  // Set IP group to bind, or "" to unbind.
+  optional string ip_group = 6 [json_name = "ipGroup"];
+  optional string server_environment = 7 [json_name = "serverEnvironment"];
+}
+
+message DeleteServerPolicyRequest {
+  string name = 1;
+}
+
+message ServerPolicyResponse {
+  bool success = 1;
+  string data = 2;
+  string message = 3;
+}
+
+// ── Custom Policy ──────────────────────────────────────────────────────
+//
+// Custom rules under a security policy. Supports IP/URL/header blocking,
+// whitelisting, alerting, etc.
+//
+// Variables: CLIENT_IP, REQUEST_METHOD, REQUEST_HEADERS(input=header-name),
+//            REQUEST_URI_RAW, REQUEST_FILENAME
+// Operators: strEqual, contains, match (regex)
+// Actions:  deny, alert, allow, continue, deny-nlog,
+//           temp-redirect, perm-redirect, errpage, disable-rule
+// ────────────────────────────────────────────────────────────────────────
+
+service WafCustomPolicyService {
+  rpc ShowCustomPolicies(ShowCustomPoliciesRequest) returns (ShowCustomPoliciesResponse);
+  rpc AddCustomPolicy(AddCustomPolicyRequest) returns (CustomPolicyResponse);
+  rpc ModifyCustomPolicy(ModifyCustomPolicyRequest) returns (CustomPolicyResponse);
+  rpc DeleteCustomPolicy(DeleteCustomPolicyRequest) returns (CustomPolicyResponse);
+}
+
+message ShowCustomPoliciesRequest {
+  string security_policy = 1 [json_name = "securityPolicy"];
+  string name = 2;
+}
+
+message CustomPolicyRow {
+  string name = 1;
+  string enable = 2;
+  string level = 3;
+  string action = 4;
+  string phase = 5;
+  string log_message = 6 [json_name = "logMessage"];
+}
+
+message ShowCustomPoliciesResponse {
+  bool success = 1;
+  int32 total = 2;
+  repeated CustomPolicyRow rows = 3;
+  string message = 4;
+}
+
+message CustomCondition {
+  // Variable name: CLIENT_IP, REQUEST_METHOD, REQUEST_HEADERS, REQUEST_URI_RAW
+  string variable_name = 1 [json_name = "variableName"];
+  // Input for header-type variables (e.g. "User-Agent", "Host"). Empty for others.
+  string variable_input = 2 [json_name = "variableInput"];
+  // Operator: strEqual, contains, match
+  string operator = 3;
+  // Value to match against.
+  string expression = 4;
+}
+
+message AddCustomPolicyRequest {
+  string security_policy = 1 [json_name = "securityPolicy"];
+  string name = 2;
+  // "on" or "off"
+  string enable = 3;
+  // "high", "medium", or "low"
+  string level = 4;
+  // request_header, request_body, response_header, response_body
+  string process_phase = 5 [json_name = "processPhase"];
+  // deny, alert, allow, continue, deny-nlog, temp-redirect, perm-redirect, errpage, disable-rule
+  string action_type = 6 [json_name = "actionType"];
+  // Required for temp-redirect (URL) or errpage (error page name), or disable-rule (rule ID).
+  string action_data = 7 [json_name = "actionData"];
+  // Log message (1-127 chars, required).
+  string log_info = 8 [json_name = "logInfo"];
+  // Up to 5 conditions.
+  repeated CustomCondition conditions = 9;
+}
+
+message ModifyCustomPolicyRequest {
+  string security_policy = 1 [json_name = "securityPolicy"];
+  string name = 2;
+  optional string enable = 3;
+  optional string level = 4;
+  optional string process_phase = 5 [json_name = "processPhase"];
+  optional string action_type = 6 [json_name = "actionType"];
+  optional string action_data = 7 [json_name = "actionData"];
+  optional string log_info = 8 [json_name = "logInfo"];
+  repeated CustomCondition conditions = 9;
+}
+
+message DeleteCustomPolicyRequest {
+  string security_policy = 1 [json_name = "securityPolicy"];
+  string name = 2;
+}
+
+message CustomPolicyResponse {
+  bool success = 1;
+  string data = 2;
+  string message = 3;
+}
+
+// ── Rule Status ────────────────────────────────────────────────────────
+//
+// Query WAF detection engine status and built-in/core/app rules.
+// ────────────────────────────────────────────────────────────────────────
+
+service WafRuleService {
+  // Show which detection engine modules are enabled.
+  rpc ShowDefencePolicy(ShowDefencePolicyRequest) returns (ShowDefencePolicyResponse);
+
+  // Show detection engine actions (deny/alert/default) per rule type.
+  rpc ShowRuleActions(ShowRuleActionsRequest) returns (ShowRuleActionsResponse);
+
+  // List built-in / core / app rules.
+  rpc ShowBuiltRules(ShowBuiltRulesRequest) returns (ShowBuiltRulesResponse);
+
+  // Search built-in / core / app rules by attack type or keyword.
+  rpc SearchBuiltRules(SearchBuiltRulesRequest) returns (ShowBuiltRulesResponse);
+}
+
+message ShowDefencePolicyRequest {
+  string security_policy = 1 [json_name = "securityPolicy"];
+}
+
+message ShowDefencePolicyResponse {
+  bool success = 1;
+  int32 total = 2;
+  repeated DefencePolicyRow rows = 3;
+  string message = 4;
+}
+
+message DefencePolicyRow {
+  string defence_xss = 1 [json_name = "defenceXss"];
+  string defence_scanner = 2 [json_name = "defenceScanner"];
+  string defence_sqli = 3 [json_name = "defenceSqli"];
+  string defence_osi = 4 [json_name = "defenceOsi"];
+  string defence_rfi = 5 [json_name = "defenceRfi"];
+  string defence_dir = 6 [json_name = "defenceDir"];
+  string defence_leakage = 7 [json_name = "defenceLeakage"];
+  string defence_ldap = 8 [json_name = "defenceLdap"];
+  string defence_xpath = 9 [json_name = "defenceXpath"];
+  string defence_ssi = 10 [json_name = "defenceSsi"];
+  string defence_server = 11 [json_name = "defenceServer"];
+  string defence_other = 12 [json_name = "defenceOther"];
+  string defence_user = 13 [json_name = "defenceUser"];
+  string defence_webshell = 14 [json_name = "defenceWebshell"];
+  string defence_all = 15 [json_name = "defenceAll"];
+}
+
+message ShowRuleActionsRequest {
+  string security_policy = 1 [json_name = "securityPolicy"];
+}
+
+message RuleActionRow {
+  string action_xss = 1 [json_name = "actionXss"];
+  string action_sqli = 2 [json_name = "actionSqli"];
+  string action_dir = 3 [json_name = "actionDir"];
+  string action_scanner = 4 [json_name = "actionScanner"];
+  string action_webshell = 5 [json_name = "actionWebshell"];
+  string action_user = 6 [json_name = "actionUser"];
+  string action_all = 7 [json_name = "actionAll"];
+}
+
+message ShowRuleActionsResponse {
+  bool success = 1;
+  int32 total = 2;
+  repeated RuleActionRow rows = 3;
+  string message = 4;
+}
+
+message ShowBuiltRulesRequest {
+  string security_policy = 1 [json_name = "securityPolicy"];
+  // "built", "core", or "app"
+  string rule_type = 2 [json_name = "ruleType"];
+  int32 page = 3;
+  int32 rows = 4;
+}
+
+message BuiltRuleRow {
+  int32 rid = 1;
+  string name = 2;
+  string action = 3;
+  int32 enable = 4;
+  string status = 5;
+  string r_description = 6 [json_name = "rDescription"];
+  string at_name = 7 [json_name = "atName"];
+  string accu_accuracy = 8 [json_name = "accuAccuracy"];
+}
+
+message ShowBuiltRulesResponse {
+  bool success = 1;
+  int32 total = 2;
+  repeated BuiltRuleRow rows = 3;
+  string message = 4;
+}
+
+message SearchBuiltRulesRequest {
+  string security_policy = 1 [json_name = "securityPolicy"];
+  string rule_type = 2 [json_name = "ruleType"];
+  // Attack type: all, modified, unmodified, XSS, SQLI, Webshell, etc.
+  string attack_type = 3 [json_name = "attackType"];
+  // Free-text search
+  string condition_query = 4 [json_name = "conditionQuery"];
+  int32 page = 5;
+  int32 rows = 6;
+}

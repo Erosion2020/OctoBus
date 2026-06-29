@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "waf_base_url": {
+      "type": "string",
+      "description": "WAF management base URL, e.g. https://<waf-ip>:8443"
+    }
+  },
+  "required": ["waf_base_url"]
+}

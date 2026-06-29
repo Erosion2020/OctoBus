@@ -48,17 +48,20 @@ const server = http.createServer(async (req, res) => {
     const password = url.searchParams.get("password");
     const ngtosAuth = url.searchParams.get("ngtosAuth");
     if (!name || !password || !ngtosAuth) {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ result: false, msg: "missing required parameters" }));
       return;
     }
-    // Validate password: decrypt AES-128-CBC, compare with TEST_PASS
+    // Validate password + ngtosAuth: decrypt AES-128-CBC values and compare with expected plaintext
     let valid = false;
     try {
-      const decipher = crypto.createDecipheriv("aes-128-cbc", AES_KEY, AES_IV);
-      decipher.setAutoPadding(true);
-      const decrypted = Buffer.concat([decipher.update(Buffer.from(password, "base64")), decipher.final()]).toString("utf8");
-      valid = (name === TEST_USER && decrypted === TEST_PASS);
+      const decipherPwd = crypto.createDecipheriv("aes-128-cbc", AES_KEY, AES_IV);
+      decipherPwd.setAutoPadding(true);
+      const decryptedPwd = Buffer.concat([decipherPwd.update(Buffer.from(password, "base64")), decipherPwd.final()]).toString("utf8");
+      const decipherAuth = crypto.createDecipheriv("aes-128-cbc", AES_KEY, AES_IV);
+      decipherAuth.setAutoPadding(true);
+      const decryptedAuth = Buffer.concat([decipherAuth.update(Buffer.from(ngtosAuth, "base64")), decipherAuth.final()]).toString("utf8");
+      valid = (name === TEST_USER && decryptedPwd === TEST_PASS && decryptedAuth === String(TEST_PASS.length));
     } catch { valid = false; }
     if (valid) {
       const sid = crypto.randomBytes(13).toString("hex");
@@ -67,11 +70,11 @@ const server = http.createServer(async (req, res) => {
       sessions.set(sid, { authId, secret: TEST_SECRET, tokens });
       res.writeHead(200, {
         "set-cookie": `SESSID=${sid}; Path=/`,
-        "content-type": "text/html; charset=utf-8",
+        "content-type": "application/json; charset=utf-8",
       });
       res.end(JSON.stringify({ result: true, data: { authid: authId, url: "home" }, secret: TEST_SECRET, tokens }));
     } else {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ result: false, msg: "invalid credentials" }));
     }
     return;

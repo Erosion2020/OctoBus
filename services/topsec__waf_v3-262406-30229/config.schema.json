@@ -4,6 +4,11 @@
     "waf_base_url": {
       "type": "string",
       "description": "WAF management base URL, e.g. https://<waf-ip>:8443"
+    },
+    "tls_verify": {
+      "type": "boolean",
+      "description": "Enable TLS certificate verification. Default false for self-signed WAF certificates.",
+      "default": false
     }
   },
   "required": ["waf_base_url"]

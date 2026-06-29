@@ -22,12 +22,12 @@ function aesEncrypt(plaintext) {
 
 function md5(s) { return crypto.createHash("md5").update(s).digest("hex"); }
 
-function httpsGet(urlStr, cookie) {
+function httpsGet(urlStr, cookie, tlsVerify = false) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const opts = {
       hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search,
-      method: "GET", rejectUnauthorized: false, timeout: 30_000,
+      method: "GET", rejectUnauthorized: tlsVerify, timeout: 30_000,
     };
     if (cookie) opts.headers = { Cookie: `SESSID=${cookie}` };
     const req = https.request(opts, (res) => {
@@ -47,12 +47,12 @@ function httpsGet(urlStr, cookie) {
   });
 }
 
-function httpsPost(urlStr, body, cookie) {
+function httpsPost(urlStr, body, cookie, tlsVerify = false) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const opts = {
       hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search,
-      method: "POST", rejectUnauthorized: false, timeout: 30_000,
+      method: "POST", rejectUnauthorized: tlsVerify, timeout: 30_000,
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     };
     if (cookie) opts.headers.Cookie = `SESSID=${cookie}`;
@@ -152,14 +152,26 @@ async function callWafApi(method, urlPath, commands, wafBaseUrl) {
   flatParams.errorMode = "1";
 
   const qs = buildQuery(flatParams);
+  const tlsVerify = session.tlsVerify === true;
   let res;
-  if (method === "GET") {
-    res = await httpsGet(`${wafBaseUrl}${urlPath}?${qs}`, session.sid);
-  } else {
-    res = await httpsPost(`${wafBaseUrl}${urlPath}?userMark=${session.authId}`, qs, session.sid);
+  try {
+    if (method === "GET") {
+      res = await httpsGet(`${wafBaseUrl}${urlPath}?${qs}`, session.sid, tlsVerify);
+    } else {
+      res = await httpsPost(`${wafBaseUrl}${urlPath}?userMark=${session.authId}`, qs, session.sid, tlsVerify);
+    }
+  } catch (err) {
+    // restore token on network failure
+    session.tokens.unshift(token);
+    return { success: false, message: "WAF request failed" };
   }
 
-  const parsed = parseWafResponse(res.body, session.tokens);
+  let parsed;
+  try {
+    parsed = parseWafResponse(res.body, session.tokens);
+  } catch {
+    return { success: false, message: "invalid WAF response" };
+  }
   parsed._httpStatus = res.status;
   return parsed;
 }
@@ -197,7 +209,7 @@ async function login(ctx) {
     const wafSecret = data.secret || "";
     const tokens = Array.isArray(data.tokens) ? [...data.tokens] : [];
 
-    setSession(wafBaseUrl, { sid, authId, secret: wafSecret, tokens });
+    setSession(wafBaseUrl, { sid, authId, secret: wafSecret, tokens, tlsVerify: config.tls_verify === true });
 
     return { success: true, sessionId: sid, authId, secret: wafSecret, tokens, message: "ok" };
   } catch (err) {
@@ -254,7 +266,10 @@ async function addBlackIp(ctx) {
     if (bindResult.result === true) {
       message = `黑名单IP组 "${req.name}" 创建成功，已绑定到服务器策略 "${req.serverPolicy}"。`;
     } else {
-      message = `黑名单IP组 "${req.name}" 创建成功，但绑定服务器策略失败（请登录WAF → Web防护 → 服务器策略 → ${req.serverPolicy}，手动添加ip-group: ${req.name}）。`;
+      // rollback: delete the orphaned ip group
+      await callWafApi("POST", "/home/default/delete/",
+        [{ waf_ip_group_delete: { name: req.name } }], wafBaseUrl);
+      message = `黑名单IP组 "${req.name}" 创建成功，但绑定服务器策略失败，已回滚删除。请检查服务器策略 "${req.serverPolicy}" 是否存在。`;
     }
   } else if (result.result === true && scope === "global") {
     message = `全局黑名单IP组 "${req.name}" 创建成功，对所有站点生效。`;
@@ -292,7 +307,10 @@ async function addWhiteIp(ctx) {
     if (bindResult.result === true) {
       message = `白名单IP组 "${req.name}" 创建成功，已绑定到服务器策略 "${req.serverPolicy}"。`;
     } else {
-      message = `白名单IP组 "${req.name}" 创建成功，但绑定服务器策略失败（请登录WAF → Web防护 → 服务器策略 → ${req.serverPolicy}，手动添加ip-group: ${req.name}）。`;
+      // rollback: delete the orphaned ip group
+      await callWafApi("POST", "/home/default/delete/",
+        [{ waf_ip_group_delete: { name: req.name } }], wafBaseUrl);
+      message = `白名单IP组 "${req.name}" 创建成功，但绑定服务器策略失败，已回滚删除。请检查服务器策略 "${req.serverPolicy}" 是否存在。`;
     }
   } else if (result.result === true && scope === "global") {
     message = `全局白名单IP组 "${req.name}" 创建成功，对所有站点生效。`;
@@ -420,13 +438,23 @@ async function callSeSecurityApi(method, urlPath, params, wafBaseUrl) {
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
     .join("&");
 
+  const tlsVerify = session.tlsVerify === true;
   let res;
-  if (method === "GET") {
-    res = await httpsGet(`${wafBaseUrl}${urlPath}?${qs}`, session.sid);
-  } else {
-    res = await httpsPost(`${wafBaseUrl}${urlPath}?userMark=${session.authId}`, qs, session.sid);
+  try {
+    if (method === "GET") {
+      res = await httpsGet(`${wafBaseUrl}${urlPath}?${qs}`, session.sid, tlsVerify);
+    } else {
+      res = await httpsPost(`${wafBaseUrl}${urlPath}?userMark=${session.authId}`, qs, session.sid, tlsVerify);
+    }
+  } catch (err) {
+    session.tokens.unshift(token);
+    return { success: false, message: "WAF request failed" };
   }
-  return parseWafResponse(res.body, session.tokens);
+  try {
+    return parseWafResponse(res.body, session.tokens);
+  } catch {
+    return { success: false, message: "invalid WAF response" };
+  }
 }
 
 function buildConditionList(conditions) {

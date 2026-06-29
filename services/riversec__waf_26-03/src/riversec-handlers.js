@@ -599,6 +599,8 @@ const blockIP = wrap(async (ctx, client) => {
   };
 });
 
+// Botgate has no single-IP delete API; UnblockIP reads the full list then overwrites it.
+// Concurrent UnblockIP / SetBlacklist / ClearBlacklist calls can race (lost update).
 const unblockIP = wrap(async (ctx, client) => {
   const ips = resolveIpList(ctx.req);
   const removeSet = buildBlacklistRemoveSet(ips);

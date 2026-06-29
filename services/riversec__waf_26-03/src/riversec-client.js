@@ -81,9 +81,14 @@ export function resolveVerifySSL(config = {}) {
   return true;
 }
 
+let insecureDispatcher;
+
 export function createFetchDispatcher(verifySSL) {
   if (verifySSL) return undefined;
-  return new Agent({ connect: { rejectUnauthorized: false } });
+  if (!insecureDispatcher) {
+    insecureDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+  }
+  return insecureDispatcher;
 }
 
 function normalizeHeaders(headers = {}) {

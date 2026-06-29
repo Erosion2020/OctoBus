@@ -128,10 +128,12 @@ test('resolveVerifySSL defaults to true and honors explicit false', () => {
   assert.equal(resolveVerifySSL({ skipTlsVerify: true }), false);
 });
 
-test('createFetchDispatcher uses undici Agent when TLS verification is disabled', () => {
+test('createFetchDispatcher reuses a shared undici Agent when TLS verification is disabled', () => {
   assert.equal(createFetchDispatcher(true), undefined);
-  const dispatcher = createFetchDispatcher(false);
-  assert.ok(dispatcher instanceof Agent);
+  const first = createFetchDispatcher(false);
+  const second = createFetchDispatcher(false);
+  assert.ok(first instanceof Agent);
+  assert.equal(first, second);
 });
 
 test('RiversecClient passes undici dispatcher and does not mutate process env', async () => {
@@ -151,7 +153,12 @@ test('RiversecClient passes undici dispatcher and does not mutate process env', 
     { baseUrl: 'https://192.168.2.200:20167', verifySSL: false },
     { tokenId: 'api_admin', tokenValue: 'test-token-value' },
   );
+  const otherClient = new RiversecClient(
+    { baseUrl: 'https://10.0.0.1:20167', verifySSL: false },
+    { tokenId: 'other', tokenValue: 'other-token' },
+  );
   assert.ok(client.dispatcher instanceof Agent);
+  assert.equal(client.dispatcher, otherClient.dispatcher);
   assert.equal(process.env.NO_PROXY, previousNoProxy);
   assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, previousTlsReject);
 

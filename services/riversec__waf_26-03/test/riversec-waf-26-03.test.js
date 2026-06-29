@@ -4,7 +4,8 @@ import test from 'node:test';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
-import { RiversecClient, signRequest, buildCanonicalQueryString, EMPTY_MD5_HASH, resolveVerifySSL, buildTlsOptions } from '../src/riversec-client.js';
+import { RiversecClient, signRequest, buildCanonicalQueryString, EMPTY_MD5_HASH, resolveVerifySSL, createFetchDispatcher } from '../src/riversec-client.js';
+import { Agent } from 'undici';
 import {
   METHOD_PATHS,
   _test,
@@ -127,16 +128,13 @@ test('resolveVerifySSL defaults to true and honors explicit false', () => {
   assert.equal(resolveVerifySSL({ skipTlsVerify: true }), false);
 });
 
-test('buildTlsOptions uses fetch init flags instead of global TLS env', () => {
-  assert.deepEqual(buildTlsOptions({ verifySSL: true }), {});
-  assert.deepEqual(buildTlsOptions({ verifySSL: false }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+test('createFetchDispatcher uses undici Agent when TLS verification is disabled', () => {
+  assert.equal(createFetchDispatcher(true), undefined);
+  const dispatcher = createFetchDispatcher(false);
+  assert.ok(dispatcher instanceof Agent);
 });
 
-test('RiversecClient does not mutate process env on construction or request', async () => {
+test('RiversecClient passes undici dispatcher and does not mutate process env', async () => {
   const previousNoProxy = process.env.NO_PROXY;
   const previousTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
   let capturedInit;
@@ -153,11 +151,13 @@ test('RiversecClient does not mutate process env on construction or request', as
     { baseUrl: 'https://192.168.2.200:20167', verifySSL: false },
     { tokenId: 'api_admin', tokenValue: 'test-token-value' },
   );
+  assert.ok(client.dispatcher instanceof Agent);
   assert.equal(process.env.NO_PROXY, previousNoProxy);
   assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, previousTlsReject);
 
   await client.getBlacklistStatus();
-  assert.equal(capturedInit.insecureSkipVerify, true);
+  assert.ok(capturedInit.dispatcher instanceof Agent);
+  assert.equal(capturedInit.insecureSkipVerify, undefined);
   assert.equal(process.env.NO_PROXY, previousNoProxy);
   assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, previousTlsReject);
 });

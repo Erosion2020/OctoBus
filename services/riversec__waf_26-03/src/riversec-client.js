@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { URL } from 'node:url';
+import { Agent } from 'undici';
 
 export const EMPTY_MD5_HASH = 'd41d8cd98f00b204e9800998ecf8427e';
 
@@ -80,13 +81,9 @@ export function resolveVerifySSL(config = {}) {
   return true;
 }
 
-export function buildTlsOptions(config = {}) {
-  if (resolveVerifySSL(config)) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+export function createFetchDispatcher(verifySSL) {
+  if (verifySSL) return undefined;
+  return new Agent({ connect: { rejectUnauthorized: false } });
 }
 
 function normalizeHeaders(headers = {}) {
@@ -111,6 +108,7 @@ export class RiversecClient {
     this.verifySSL = resolveVerifySSL(config);
     this.maxRetries = config.maxRetries ?? 0;
     this.defaultHeaders = normalizeHeaders(config.headers);
+    this.dispatcher = createFetchDispatcher(this.verifySSL);
   }
 
   async request(method, path, { query = {}, body = null, rawBody = false } = {}) {
@@ -139,8 +137,10 @@ export class RiversecClient {
           method: method.toUpperCase(),
           headers,
           signal: controller.signal,
-          ...buildTlsOptions({ verifySSL: this.verifySSL }),
         };
+        if (this.dispatcher) {
+          fetchOptions.dispatcher = this.dispatcher;
+        }
         if (bodyStr != null && method.toUpperCase() !== 'GET') {
           fetchOptions.body = bodyStr;
         }

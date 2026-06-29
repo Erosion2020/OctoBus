@@ -7,6 +7,7 @@
     "riversec-waf-26-03": "bin/riversec-waf-26-03.js"
   },
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0"
+    "@chaitin-ai/octobus-sdk": "^0.5.0",
+    "undici": "^7.0.0"
   }
 }

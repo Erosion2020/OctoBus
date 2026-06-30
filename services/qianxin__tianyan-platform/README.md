@@ -1,11 +1,10 @@
 # QIANXIN TianYan Platform
 
-OctoBus service package for **QIANXIN TianYan** (奇安信网神威胁监测与分析系统 - 天眼分析平台) V4.0.12.0. Wraps the platform's alarm query REST API as a gRPC method.
+OctoBus service package for **QIANXIN TianYan** (奇安信网神威胁监测与分析系统 - 天眼分析平台) V4.0.12.0.
 
 - **Vendor**: QIANXIN (奇安信)
 - **Product**: 天眼分析平台 V4.0.12.0
 - **Proto package**: `QIANXIN_TianYan_Platform`
-- **API base path**: `/alarm/`
 
 ## Authentication
 
@@ -16,7 +15,7 @@ Set `secret.login_key` (the platform's passwordless login key, found under 系�
 1. Derives `client_id` and `client_secret` from `login_key` via SHA-256.
 2. POSTs to `/skyeye/v1/admin/auth` to obtain an `access_token`.
 3. GETs `/skyeye/v1/admin/auth?token=...` to acquire a session cookie and CSRF token from the HTML response.
-4. Calls the alarm API with the CSRF token and session cookie.
+4. Calls the target API with the CSRF token and session cookie.
 
 The default login username is `tapadmin`; override via `secret.username`.
 
@@ -30,9 +29,17 @@ The default login username is `tapadmin`; override via `secret.username`.
 
 ## Methods
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `ListAlarms` | `GET /alarm/alarm/list` | Query threat alarms with optional filters for hazard level, time range, attacker/victim IP, IOC, threat type, and disposition status. |
+| Method | HTTP | Endpoint | Description |
+|--------|------|----------|-------------|
+| `ListAlarms` | GET | `/skyeye/v1/alarm/alarm/list` | Query threat alarms with optional filters for hazard level, time range, attacker/victim IP (gzip+base64 encoded), IOC, threat type, and disposition status. |
+| `UpdateAlarmStatus` | PUT | `/alarm/alarm/list` | Update alarm disposition: 0=未处置, 1=已处置, 6=忽略, 7=误报. |
+| `SearchLogs` | GET | `/analysis/log-search/list` | Search raw security logs by keyword, time range, log index, and category. |
+| `SPLSearch` | GET | `/analysis/log-search/spl-search` | Expert SPL query with structured field extraction. |
+| `ListAssets` | GET | `/asset/asset/manage/info` | Query asset inventory with optional IP, name, group, port, and type filters. |
+| `ListVulnerabilities` | GET | `/asset/vul/leaks/list` | List asset vulnerabilities with optional IP, name, and severity filters. |
+| `ThreatHuntSearch` | GET | `/analysis/hunt/search` | Build a threat relationship graph for an IOC keyword (IP, domain, URL, MD5, or email). |
+| `AddFlowWhitelist` | POST | `/system/rule_cfg/white_list_flow` | Add an IP, IOC, or threat type to the flow sensor whitelist to suppress future alerts. |
+| `GetCompromisedHostStatus` | GET | `/analysis/hunting/stuck_host/status` | Check whether a host is compromised and return its alarm count, risk score, and IOC count. |
 
 ## Test
 

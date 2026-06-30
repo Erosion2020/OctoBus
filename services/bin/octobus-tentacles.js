@@ -81,6 +81,10 @@ const services = {
     entryFile: "../imperva__waf-gateway_v13-6-90/bin/imperva-waf-gateway-v13-6-90.js",
     serviceModule: "../imperva__waf-gateway_v13-6-90/src/service.js",
   },
+  "m01-intelligence": {
+    entryFile: "../m01__intelligence/bin/m01-intelligence.js",
+    serviceModule: "../m01__intelligence/src/service.js",
+  },
   "nsfocus-ads-v4-5-r90-f06": {
     entryFile: "../nsfocus__ads_v4-5-r90-f06/bin/nsfocus-ads-v4-5-r90-f06.js",
     serviceModule: "../nsfocus__ads_v4-5-r90-f06/src/service.js",

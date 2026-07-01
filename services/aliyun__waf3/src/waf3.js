@@ -16,6 +16,17 @@ function mapAliError(err) {
   return new GrpcError(grpcStatus.UNAVAILABLE, msg);
 }
 
+// ── 包装器：自动映射阿里云 SDK 异常 ──
+function withErrorMapping(fn) {
+  return async function(call) {
+    try {
+      return await fn(call);
+    } catch (e) {
+      throw mapAliError(e);
+    }
+  };
+}
+
 // ── 构建 RPCClient ──
 function buildClient(config, secret) {
   return new RPCClient({
@@ -30,7 +41,8 @@ function buildClient(config, secret) {
 // ── 按场景获取模板 ──
 const sceneTemplateCache = {};
 async function getTemplateForScene(client, config, defenseScene) {
-  if (sceneTemplateCache[defenseScene]) return sceneTemplateCache[defenseScene];
+  const cacheKey = (config.instanceId || "") + ":" + defenseScene;
+  if (sceneTemplateCache[cacheKey]) return sceneTemplateCache[cacheKey];
   const result = await client.request("DescribeDefenseTemplates", {
     InstanceId: config.instanceId,
     RegionId: config.regionId || "cn-hangzhou",
@@ -39,8 +51,8 @@ async function getTemplateForScene(client, config, defenseScene) {
   });
   const templates = result?.Templates || result?.DefenseTemplates || [];
   if (!templates.length) throw new GrpcError(grpcStatus.FAILED_PRECONDITION, `no template for scene: ${defenseScene}`);
-  sceneTemplateCache[defenseScene] = String(templates[0].TemplateId);
-  return sceneTemplateCache[defenseScene];
+  sceneTemplateCache[cacheKey] = String(templates[0].TemplateId);
+  return sceneTemplateCache[cacheKey];
 }
 
 // ── 原生 HTTPS（绕过 SDK Filter 编码问题） ──
@@ -254,7 +266,8 @@ async function CreateACLRule(call) {
 async function DeleteRule(call) {
   if (!call.request.ruleId) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, "rule_id required");
   const client = buildClient(call.config, call.secret);
-  const templateId = call.request.templateId || await getTemplateForScene(client, call.config, "ip_blacklist");
+  const scene = call.request.defenseScene || "ip_blacklist";
+  const templateId = call.request.templateId || await getTemplateForScene(client, call.config, scene);
   await client.request("DeleteDefenseRule", {
     InstanceId: call.config.instanceId, RegionId: call.config.regionId || "cn-hangzhou",
     TemplateId: templateId, RuleIds: String(call.request.ruleId),
@@ -308,25 +321,25 @@ async function DescribeSecurityTopNMetric(call) {
 // 导出 — 使用函数引用模式（和 safeline-waf 一致）
 // ═══════════════════════════════════════════
 export const handlers = {
-  "Aliyun_Waf3.Waf3/BlockIP": BlockIP,
-  "Aliyun_Waf3.Waf3/UnblockIP": UnblockIP,
-  "Aliyun_Waf3.Waf3/DescribeIPBlacklist": DescribeIPBlacklist,
-  "Aliyun_Waf3.Waf3/AddIPWhitelist": AddIPWhitelist,
-  "Aliyun_Waf3.Waf3/CreateACLRule": CreateACLRule,
-  "Aliyun_Waf3.Waf3/DeleteRule": DeleteRule,
-  "Aliyun_Waf3.Waf3/DescribeRule": DescribeRule,
-  "Aliyun_Waf3.Waf3/DescribeRules": DescribeRules,
-  "Aliyun_Waf3.Waf3/DescribeSecurityTopNMetric": DescribeSecurityTopNMetric,
-  "Aliyun_Waf3.Waf3/DescribeResources": DescribeResources,
+  "Aliyun_Waf3.Waf3/BlockIP": withErrorMapping(BlockIP),
+  "Aliyun_Waf3.Waf3/UnblockIP": withErrorMapping(UnblockIP),
+  "Aliyun_Waf3.Waf3/DescribeIPBlacklist": withErrorMapping(DescribeIPBlacklist),
+  "Aliyun_Waf3.Waf3/AddIPWhitelist": withErrorMapping(AddIPWhitelist),
+  "Aliyun_Waf3.Waf3/CreateACLRule": withErrorMapping(CreateACLRule),
+  "Aliyun_Waf3.Waf3/DeleteRule": withErrorMapping(DeleteRule),
+  "Aliyun_Waf3.Waf3/DescribeRule": withErrorMapping(DescribeRule),
+  "Aliyun_Waf3.Waf3/DescribeRules": withErrorMapping(DescribeRules),
+  "Aliyun_Waf3.Waf3/DescribeSecurityTopNMetric": withErrorMapping(DescribeSecurityTopNMetric),
+  "Aliyun_Waf3.Waf3/DescribeResources": withErrorMapping(DescribeResources),
   // 短名别名，给测试用
-  BlockIP,
-  UnblockIP,
-  DescribeIPBlacklist,
-  AddIPWhitelist,
-  CreateACLRule,
-  DeleteRule,
-  DescribeRule,
-  DescribeRules,
-  DescribeSecurityTopNMetric,
-  DescribeResources,
+  BlockIP: withErrorMapping(BlockIP),
+  UnblockIP: withErrorMapping(UnblockIP),
+  DescribeIPBlacklist: withErrorMapping(DescribeIPBlacklist),
+  AddIPWhitelist: withErrorMapping(AddIPWhitelist),
+  CreateACLRule: withErrorMapping(CreateACLRule),
+  DeleteRule: withErrorMapping(DeleteRule),
+  DescribeRule: withErrorMapping(DescribeRule),
+  DescribeRules: withErrorMapping(DescribeRules),
+  DescribeSecurityTopNMetric: withErrorMapping(DescribeSecurityTopNMetric),
+  DescribeResources: withErrorMapping(DescribeResources),
 };

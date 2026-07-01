@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-#!/usr/bin/env node
 
 import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 

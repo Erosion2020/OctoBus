@@ -318,4 +318,15 @@ export const handlers = {
   "Aliyun_Waf3.Waf3/DescribeRules": DescribeRules,
   "Aliyun_Waf3.Waf3/DescribeSecurityTopNMetric": DescribeSecurityTopNMetric,
   "Aliyun_Waf3.Waf3/DescribeResources": DescribeResources,
+  // 短名别名，给测试用
+  BlockIP,
+  UnblockIP,
+  DescribeIPBlacklist,
+  AddIPWhitelist,
+  CreateACLRule,
+  DeleteRule,
+  DescribeRule,
+  DescribeRules,
+  DescribeSecurityTopNMetric,
+  DescribeResources,
 };

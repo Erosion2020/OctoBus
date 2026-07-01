@@ -13,7 +13,13 @@ const server = http.createServer((req, res) => {
   req.on("data", chunk => { body += chunk; });
   req.on("end", () => {
     const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
-    const params = Object.fromEntries(url.searchParams);
+    // 合并 query string 和 POST body 参数
+    const queryParams = Object.fromEntries(url.searchParams);
+    const bodyParams = {};
+    if (body) {
+      body.split("&").forEach(p => { const [k,v] = p.split("="); if(k) bodyParams[decodeURIComponent(k)] = decodeURIComponent(v||""); });
+    }
+    const params = { ...bodyParams, ...queryParams };
 
     // 签名校验（mock 不做真实验签，仅校验必填参数存在）
     if (!params.AccessKeyId && !params.Signature) {
@@ -34,8 +40,8 @@ const server = http.createServer((req, res) => {
       // ── DescribeDefenseTemplates ──
       case "DescribeDefenseTemplates":
         sendJSON(200, {
-          DefenseTemplates: [
-            { TemplateId: 9999, TemplateName: "default", TemplateType: "user_default", Status: 1 }
+          Templates: [
+            { TemplateId: 9999, TemplateName: "default", TemplateType: "user_default", Status: 1, DefenseScene: "ip_blacklist" }
           ],
           TotalCount: 1,
           RequestId: "mock-request-1"

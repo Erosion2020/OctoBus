@@ -3,6 +3,8 @@ import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 
 // ── 错误映射 ──
 function mapAliError(err) {
+  // 已是 GrpcError（如参数校验），直接透传
+  if (err instanceof GrpcError) return err;
   const code = (err.code || "").toString();
   const msg = err.message || "Alibaba Cloud API error";
   if (code.includes("InvalidAccessKeyId") || code.includes("SignatureDoesNotMatch"))

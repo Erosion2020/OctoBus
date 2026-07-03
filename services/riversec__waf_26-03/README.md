@@ -130,8 +130,8 @@ Suggested capsets:
 ## Risks
 
 - `SetBlacklist` and `ClearBlacklist` are destructive overwrite operations.
-- `UnblockIP` is non-atomic at the Botgate API layer: it reads the full blacklist then overwrites it via `POST` (or `DELETE` when empty). Botgate provides no per-IP delete API. This adapter serializes blacklist list mutations (`SetBlacklist`, `AddBlacklistItems`, `BlockIP`, `ClearBlacklist`, `UnblockIP`) within one instance process; concurrent writers across multiple instances or direct device API callers can still race.
-- `BlockIP` uses `PUT` (incremental add) and does not share UnblockIP's read-modify-write pattern, but is included in the instance-level write queue for consistency with other list mutations.
+- `UnblockIP` is non-atomic: it reads the full blacklist then overwrites it via `POST` (or `DELETE` when empty). Botgate provides no per-IP delete API. Serialize concurrent `UnblockIP`, `SetBlacklist`, and `ClearBlacklist` calls at the business layer, or restrict them via capset.
+- `BlockIP` uses `PUT` (incremental add) and does not share this read-modify-write race.
 - `UpgradeCluster` / `RollbackCluster` affect the entire cluster.
 - Deleted protected sites are not automatically recoverable.
 - Use test IPs such as `203.0.113.0/24` and clean up after device verification.

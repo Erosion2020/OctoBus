@@ -8,7 +8,7 @@ import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 const DEFAULT_TIMEOUT_MS = 1500;
 
-const PKG = 'M01_Intelligence.M01_Intelligence';
+const PKG = 'm01.intelligence.M01IntelligenceService';
 const DETECT_PATH = `/${PKG}/DetectIntelligence`;
 const LIST_PATH = `/${PKG}/ListIntelligence`;
 const ADD_PATH = `/${PKG}/AddIntelligence`;
@@ -213,8 +213,11 @@ export function rpcdef(ctx) {
 
     const text = await res.text();
     if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}: ${text}`);
+      if (res.status === 401) {
+        throw errorWithCode('UNAUTHENTICATED', `upstream http 401: ${text}`);
+      }
+      if (res.status === 403) {
+        throw errorWithCode('PERMISSION_DENIED', `upstream http 403: ${text}`);
       }
       if (res.status >= 400 && res.status < 500) {
         throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}: ${text}`);
@@ -234,7 +237,8 @@ export function rpcdef(ctx) {
     if (code !== undefined && code !== null && Number(code) !== 200) {
       const msg = json?.msg || `upstream code ${code}`;
       if (Number(code) === 400) throw errorWithCode('FAILED_PRECONDITION', `upstream code 400: ${msg}`);
-      if (Number(code) === 401 || Number(code) === 403) throw errorWithCode('PERMISSION_DENIED', `upstream code ${code}: ${msg}`);
+      if (Number(code) === 401) throw errorWithCode('UNAUTHENTICATED', `upstream code 401: ${msg}`);
+      if (Number(code) === 403) throw errorWithCode('PERMISSION_DENIED', `upstream code 403: ${msg}`);
       throw errorWithCode('UNAVAILABLE', `upstream code ${code}: ${msg}`);
     }
     return json?.data ?? null;

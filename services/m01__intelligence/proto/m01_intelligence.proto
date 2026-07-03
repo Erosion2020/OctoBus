@@ -1,15 +1,15 @@
 syntax = "proto3";
 
-package M01_Intelligence;
+package m01.intelligence;
 
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/M01_Intelligence";
+option go_package = "miner/grpc-service/m01/intelligence";
 
 // m01 邮件安全网关 - 本地威胁情报（Threat Intelligence）操作。
 // 枚举值以上游 wire string 形式保留（字符串字段 + handler 校验），与仓库既有风格一致。
-service M01_Intelligence {
+service M01IntelligenceService {
   // IOC 匹配/查询：对一批指标查询本地威胁情报（只读，核心方法）
   rpc DetectIntelligence(DetectIntelligenceRequest) returns (DetectIntelligenceResponse) {}
 

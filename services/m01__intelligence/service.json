@@ -19,27 +19,27 @@
   "sdk": {
     "cli": {
       "commands": {
-        "M01_Intelligence.M01_Intelligence/DetectIntelligence": {
+        "m01.intelligence.M01IntelligenceService/DetectIntelligence": {
           "name": "detect-intelligence",
           "description": "Query local threat intelligence for a batch of indicators."
         },
-        "M01_Intelligence.M01_Intelligence/ListIntelligence": {
+        "m01.intelligence.M01IntelligenceService/ListIntelligence": {
           "name": "list-intelligence",
           "description": "Paginated, filterable list of local threat intelligence."
         },
-        "M01_Intelligence.M01_Intelligence/AddIntelligence": {
+        "m01.intelligence.M01IntelligenceService/AddIntelligence": {
           "name": "add-intelligence",
           "description": "Bulk-add local threat intelligence indicators."
         },
-        "M01_Intelligence.M01_Intelligence/UpdateIntelligence": {
+        "m01.intelligence.M01IntelligenceService/UpdateIntelligence": {
           "name": "update-intelligence",
           "description": "Bulk-update local threat intelligence by id."
         },
-        "M01_Intelligence.M01_Intelligence/DeleteIntelligence": {
+        "m01.intelligence.M01IntelligenceService/DeleteIntelligence": {
           "name": "delete-intelligence",
           "description": "Bulk-delete local threat intelligence entries."
         },
-        "M01_Intelligence.M01_Intelligence/GetIntelligenceStats": {
+        "m01.intelligence.M01IntelligenceService/GetIntelligenceStats": {
           "name": "get-intelligence-stats",
           "description": "Get local threat intelligence statistics."
         }

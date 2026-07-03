@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const PKG = 'M01_Intelligence.M01_Intelligence';
+const PKG = 'm01.intelligence.M01IntelligenceService';
 const detectPath = `/${PKG}/DetectIntelligence`;
 const listPath = `/${PKG}/ListIntelligence`;
 const addPath = `/${PKG}/AddIntelligence`;
@@ -213,6 +213,9 @@ test('error mapping: endpoint, http 403/400/500, envelope code, network, bad jso
     /endpoint\/baseUrl is required/,
   );
 
+  setFetch(() => ({ status: 401, raw: 'unauthorized' }));
+  await assert.rejects((await loadRpc({}))[statsPath](), /UNAUTHENTICATED.*http 401/);
+
   setFetch(() => ({ status: 403, raw: 'forbidden' }));
   await assert.rejects((await loadRpc({}))[statsPath](), /PERMISSION_DENIED.*http 403/);
 
@@ -226,7 +229,7 @@ test('error mapping: endpoint, http 403/400/500, envelope code, network, bad jso
   await assert.rejects((await loadRpc({}))[statsPath](), /FAILED_PRECONDITION.*code 400/);
 
   setFetch(() => env(null, 401, 'no auth'));
-  await assert.rejects((await loadRpc({}))[statsPath](), /PERMISSION_DENIED.*code 401/);
+  await assert.rejects((await loadRpc({}))[statsPath](), /UNAUTHENTICATED.*code 401/);
 
   setFetch(() => env(null, 500, 'server'));
   await assert.rejects((await loadRpc({}))[statsPath](), /UNAVAILABLE.*code 500/);

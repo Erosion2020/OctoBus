@@ -186,11 +186,18 @@ const httpsPostJson = (url, init, timeoutMs) => new Promise((resolve, reject) =>
   req.end();
 });
 
-const sendJsonRequest = (url, init, config) => {
+const sendJsonRequest = async (url, init, config) => {
   if (config.skipTlsVerify && url.startsWith('https://')) {
     return httpsPostJson(url, init, config.timeoutMs);
   }
-  return fetch(url, init);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 const parseJsonResponse = async (res, context) => {
@@ -337,7 +344,6 @@ export const mapListAssetsResponse = (raw = {}) => {
   return {
     total: toInt(firstDefined(raw.total, raw.totalCount, raw.total_count), items.length),
     items,
-    raw,
   };
 };
 
@@ -360,7 +366,6 @@ export const handleGetAsset = async (req = {}, ctx = {}) => {
   }
   return {
     asset,
-    raw,
   };
 };
 

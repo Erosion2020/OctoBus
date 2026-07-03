@@ -172,7 +172,7 @@ test('ListAssets posts JSON body to /openapi/asset/list and maps assets', async 
   assert.equal(result.items[0].port_fingerprint_name, 'nginx');
   assert.equal(result.items[0].product_fingerprint_list[0].product_name_en, 'nginx');
   assert.deepEqual(result.items[1].product_fingerprint_list, []);
-  assert.equal(result.raw.message, '查询成功');
+  assert.equal(Object.hasOwn(result, 'raw'), false);
 });
 
 test('ListAssets uses HTTPS request path when skipTlsVerify is enabled', async (t) => {
@@ -210,6 +210,19 @@ test('ListAssets uses HTTPS request path when skipTlsVerify is enabled', async (
   assert.equal(capturedOptions.options.method, 'POST');
 });
 
+test('ListAssets passes timeout abort signal to fetch', async () => {
+  let capturedInit;
+  globalThis.fetch = async (url, init) => {
+    capturedInit = init;
+    return mockRes(200, { code: 0, message: '查询成功', total: 0, data: [] });
+  };
+
+  await handlers[METHOD_LIST_ASSETS_FULL](buildCtx({ config: { timeoutMs: 25 } }));
+
+  assert.ok(capturedInit.signal instanceof AbortSignal);
+  assert.equal(capturedInit.signal.aborted, false);
+});
+
 test('GetAsset filters by IP and returns the exact match', async () => {
   let capturedBody;
   globalThis.fetch = async (url, init) => {
@@ -233,7 +246,7 @@ test('GetAsset filters by IP and returns the exact match', async () => {
     ip: '192.0.2.10',
   });
   assert.equal(result.asset.ip, '192.0.2.10');
-  assert.equal(result.raw.total, 2);
+  assert.equal(Object.hasOwn(result, 'raw'), false);
 });
 
 test('GetAsset validates required IP and maps missing assets to NOT_FOUND', async () => {

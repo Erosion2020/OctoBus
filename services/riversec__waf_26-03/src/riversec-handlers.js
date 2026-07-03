@@ -520,6 +520,21 @@ const wrap = (fn) => async (ctx) => {
   }
 };
 
+// Serialize blacklist list mutations within this instance process. Botgate has no
+// per-IP delete API, so UnblockIP is read-modify-write; concurrent writes can still
+// race across multiple OctoBus instances or direct device API callers.
+let blacklistWriteChain = Promise.resolve();
+
+export const runSerializedBlacklistWrite = (operation) => {
+  const run = blacklistWriteChain.then(() => operation());
+  blacklistWriteChain = run.catch(() => {});
+  return run;
+};
+
+const wrapBlacklistWrite = (fn) => wrap(async (ctx, client) =>
+  runSerializedBlacklistWrite(() => fn(ctx, client)),
+);
+
 const getBlacklistStatus = wrap(async (_ctx, client) => {
   const response = await client.getBlacklistStatus();
   const data = checkAPIResponse(response, response.statusCode);
@@ -539,14 +554,14 @@ const getBlacklist = wrap(async (_ctx, client) => {
   return { items: data.items || [] };
 });
 
-const setBlacklist = wrap(async (ctx, client) => {
+const setBlacklist = wrapBlacklistWrite(async (ctx, client) => {
   const items = normalizeBlacklistItems(ctx.req.items, 'items');
   const response = await client.setBlacklist(items);
   checkAPIResponse(response, response.statusCode);
   return {};
 });
 
-const addBlacklistItems = wrap(async (ctx, client) => {
+const addBlacklistItems = wrapBlacklistWrite(async (ctx, client) => {
   const items = normalizeBlacklistItems(ctx.req.items, 'items');
   const response = await client.addBlacklistItems(items);
   const data = checkAPIResponse(response, response.statusCode);
@@ -557,13 +572,13 @@ const addBlacklistItems = wrap(async (ctx, client) => {
   };
 });
 
-const clearBlacklist = wrap(async (_ctx, client) => {
+const clearBlacklist = wrapBlacklistWrite(async (_ctx, client) => {
   const response = await client.clearBlacklist();
   checkAPIResponse(response, response.statusCode);
   return {};
 });
 
-const blockIP = wrap(async (ctx, client) => {
+const blockIP = wrapBlacklistWrite(async (ctx, client) => {
   rejectUnsupportedBlockIPFields(ctx.req);
   const ips = resolveIpList(ctx.req);
   const items = ips.map(normalizeHostCIDR);
@@ -600,8 +615,7 @@ const blockIP = wrap(async (ctx, client) => {
 });
 
 // Botgate has no single-IP delete API; UnblockIP reads the full list then overwrites it.
-// Concurrent UnblockIP / SetBlacklist / ClearBlacklist calls can race (lost update).
-const unblockIP = wrap(async (ctx, client) => {
+const unblockIP = wrapBlacklistWrite(async (ctx, client) => {
   const ips = resolveIpList(ctx.req);
   const removeSet = buildBlacklistRemoveSet(ips);
   const current = await client.getBlacklist();

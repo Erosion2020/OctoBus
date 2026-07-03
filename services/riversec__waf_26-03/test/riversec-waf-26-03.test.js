@@ -374,6 +374,43 @@ test('UnblockIP rejects ip_list not present in current blacklist', async () => {
   );
 });
 
+test('blacklist write handlers serialize concurrent UnblockIP calls', async () => {
+  let items = ['203.0.113.10/32', '198.51.100.1/32'];
+
+  setFetch(async (url, init) => {
+    const method = init.method?.toUpperCase();
+    if (method === 'GET' && String(url).includes('/api/v1/ip_black_list') && !String(url).includes('switch')) {
+      return new Response(JSON.stringify({ err_no: 0, items: [...items] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (method === 'POST' && String(url).includes('/api/v1/ip_black_list')) {
+      const body = JSON.parse(init.body);
+      items = body.items;
+      return new Response(JSON.stringify({ err_no: 0, err_msg: 'Success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (method === 'DELETE' && String(url).includes('/api/v1/ip_black_list')) {
+      items = [];
+      return new Response(JSON.stringify({ err_no: 0, err_msg: 'Success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    throw new Error(`unexpected fetch ${method} ${url}`);
+  });
+
+  await Promise.all([
+    handlers[METHOD_PATHS.unblockIP](buildCtx({ req: { ip_list: ['203.0.113.10'] } })),
+    handlers[METHOD_PATHS.unblockIP](buildCtx({ req: { ip_list: ['198.51.100.1'] } })),
+  ]);
+
+  assert.deepEqual(items, []);
+});
+
 test('wrap maps upstream network failures to UNAVAILABLE', async () => {
   setFetch(async () => {
     throw new TypeError('fetch failed', { cause: new Error('connect ECONNREFUSED') });

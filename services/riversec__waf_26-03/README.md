@@ -62,6 +62,8 @@ API asset CRUD and online status via `/api/v1/abd/*`.
 
 `host` and `endpoint` are aliases for `baseUrl`. Use `skipTlsVerify: true` when `verifySSL` is false.
 
+When `verifySSL` is false, the client passes an `undici` `Agent` via the native `fetch` `dispatcher` option to skip TLS certificate verification. The package bundles `undici` `^7.16.0`, aligned with `services/package.json`. OctoBus runs service packages on Node.js 18+; use the Node runtime bundled with your OctoBus install.
+
 Secret bindings from the Botgate **系统API接口** page:
 
 ```json

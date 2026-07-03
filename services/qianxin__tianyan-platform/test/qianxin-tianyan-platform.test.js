@@ -36,6 +36,11 @@ const AUTH_HTML_BODY  = '<html><head><meta name="csrf-token" content="abc123def4
 
 const makeHeaders = (entries = {}) => ({
   get: (name) => entries[name.toLowerCase()] ?? null,
+  getSetCookie: () => {
+    const v = entries['set-cookie'];
+    if (!v) return [];
+    return Array.isArray(v) ? v : [v];
+  },
 });
 
 const makeSeqFetch = (apiBody, apiStatus = 200) => {
@@ -249,7 +254,7 @@ describe('ListAlarms success', () => {
     globalThis.fetch = async (url, init) => {
       call++;
       if (call === 1) return { ok: true, status: 200, text: async () => AUTH_TOKEN_BODY, headers: makeHeaders({}) };
-      if (call === 2) return { ok: true, status: 200, text: async () => AUTH_HTML_BODY, headers: makeHeaders({ 'set-cookie': 'session=abc; Path=/, token=xyz; HttpOnly' }) };
+      if (call === 2) return { ok: true, status: 200, text: async () => AUTH_HTML_BODY, headers: makeHeaders({ 'set-cookie': ['session=abc; Path=/', 'token=xyz; HttpOnly'] }) };
       capturedCookie = init?.headers?.Cookie ?? '';
       return { ok: true, status: 200, text: async () => JSON.stringify({ data: { items: [], total: 0 } }), headers: makeHeaders({}) };
     };
@@ -336,6 +341,28 @@ describe('ListAlarms auth errors', () => {
     };
     const ctx = buildCtx({ req: { offset: 1, limit: 10 } });
     await assert.rejects(rpcdef(ctx)[PATH_LIST_ALARMS](), /UNKNOWN/);
+  });
+
+  it('throws PERMISSION_DENIED on HTTP 403 from auth step2', async () => {
+    let call = 0;
+    globalThis.fetch = async () => {
+      call++;
+      if (call === 1) return { ok: true, status: 200, text: async () => AUTH_TOKEN_BODY, headers: makeHeaders({}) };
+      return { ok: false, status: 403, text: async () => 'Forbidden', headers: makeHeaders({}) };
+    };
+    const ctx = buildCtx({ req: { offset: 1, limit: 10 } });
+    await assert.rejects(rpcdef(ctx)[PATH_LIST_ALARMS](), /PERMISSION_DENIED/);
+  });
+
+  it('throws UNAVAILABLE on HTTP 500 from auth step2', async () => {
+    let call = 0;
+    globalThis.fetch = async () => {
+      call++;
+      if (call === 1) return { ok: true, status: 200, text: async () => AUTH_TOKEN_BODY, headers: makeHeaders({}) };
+      return { ok: false, status: 500, text: async () => 'Internal Server Error', headers: makeHeaders({}) };
+    };
+    const ctx = buildCtx({ req: { offset: 1, limit: 10 } });
+    await assert.rejects(rpcdef(ctx)[PATH_LIST_ALARMS](), /UNAVAILABLE/);
   });
 
   it('csrf-token alternate regex pattern', async () => {

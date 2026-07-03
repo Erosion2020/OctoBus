@@ -171,11 +171,15 @@ export function rpcdef(ctx) {
     });
 
     const html = await res2.text();
+    if (!res2.ok) {
+      const s = res2.status;
+      if (s === 401 || s === 403) throw err('PERMISSION_DENIED', `auth step2 failed: http ${s}`);
+      throw err('UNAVAILABLE', `auth step2 failed: http ${s}`);
+    }
 
-    const cookieHeader = res2.headers.get('set-cookie') || '';
-    const cookie = cookieHeader
-      .split(',')
-      .map((part) => part.split(';')[0].trim())
+    const setCookies = res2.headers.getSetCookie();
+    const cookie = setCookies
+      .map((c) => c.split(';')[0].trim())
       .filter(Boolean)
       .join('; ');
 

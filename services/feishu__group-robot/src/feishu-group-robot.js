@@ -1,15 +1,9 @@
-import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
-import { Agent } from 'undici';
+import { GrpcError, createTlsDispatcher, grpcCodeFor, normalizeTimeoutMs } from '@chaitin-ai/octobus-sdk';
 
 export const METHOD_SEND_TEXT_PATH = '/Feishu_GroupRobot.Feishu_GroupRobot/SendTextMessage';
 export const METHOD_SEND_TEXT_FULL = 'Feishu_GroupRobot.Feishu_GroupRobot/SendTextMessage';
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const SUCCESS_STATUS_CODES = new Set([200, 209, 210]);
-
-const grpcCodeFor = (code) => ({
-  INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
-  UNAVAILABLE: grpcStatus.UNAVAILABLE,
-})[code] ?? grpcStatus.UNKNOWN;
 
 const errorWithCode = (code, message) => {
   const err = new GrpcError(grpcCodeFor(code), message);
@@ -68,11 +62,10 @@ const resolveCallContext = (ctx = {}) => ({
 
 const resolveTimeoutMs = (ctx) => {
   const bindings = mergedBindings(ctx);
-  const raw = Number(firstDefined(bindings.timeoutMs, bindings.timeout_ms, ctx?.limits?.timeoutMs, DEFAULT_TIMEOUT_MS));
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
+  return normalizeTimeoutMs(firstDefined(bindings.timeoutMs, bindings.timeout_ms, ctx?.limits?.timeoutMs), DEFAULT_TIMEOUT_MS);
 };
 
-const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+const insecureTlsDispatcher = createTlsDispatcher(true);
 
 const buildTlsOptions = (bindings) => {
   const enabled = Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);

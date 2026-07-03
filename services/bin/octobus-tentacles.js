@@ -45,6 +45,10 @@ const services = {
     entryFile: "../dingtalk__group-robot/bin/dingtalk-group-robot.js",
     serviceModule: "../dingtalk__group-robot/src/service.js",
   },
+  "dsensor": {
+    entryFile: "../chaitin__dsensor_ds-s_h_40-25.07.001/bin/dsensor.js",
+    serviceModule: "../chaitin__dsensor_ds-s_h_40-25.07.001/src/service.js",
+  },
   "dptech-eds": {
     entryFile: "../dptech__eds/bin/dptech-eds.js",
     serviceModule: "../dptech__eds/src/service.js",
@@ -68,6 +72,10 @@ const services = {
   "first-epss-v1": {
     entryFile: "../first__epss-v1/bin/first-epss-v1.js",
     serviceModule: "../first__epss-v1/src/service.js",
+  },
+  "fofa-network-space-mapper": {
+    entryFile: "../fofa__network-space-mapper/bin/fofa-network-space-mapper.js",
+    serviceModule: "../fofa__network-space-mapper/src/service.js",
   },
   "fortinet-fw": {
     entryFile: "../fortinet__fw/bin/fortinet-fw.js",
@@ -109,6 +117,10 @@ const services = {
     entryFile: "../nsfocus__ads_v4-5-r90-f06/bin/nsfocus-ads-v4-5-r90-f06.js",
     serviceModule: "../nsfocus__ads_v4-5-r90-f06/src/service.js",
   },
+  "nsfocus-ngfw-v60-9900": {
+    entryFile: "../nsfocus__ngfw_v60-9900/bin/nsfocus-ngfw-v60-9900.js",
+    serviceModule: "../nsfocus__ngfw_v60-9900/src/service.js",
+  },
   "nsfocus-nips-v5-6-r11": {
     entryFile: "../nsfocus__nips_v5-6-r11/bin/nsfocus-nips-v5-6-r11.js",
     serviceModule: "../nsfocus__nips_v5-6-r11/src/service.js",
@@ -141,6 +153,10 @@ const services = {
     entryFile: "../qingteng__hids_v3-4/bin/qingteng-hids-v3-4.js",
     serviceModule: "../qingteng__hids_v3-4/src/service.js",
   },
+  "qingteng-hids-v5": {
+    entryFile: "../qingteng__hids_v5/bin/qingteng-hids-v5.js",
+    serviceModule: "../qingteng__hids_v5/src/service.js",
+  },
   "ray-waf-v6-1-2": {
     entryFile: "../ray__waf_v6-1-2/bin/ray-waf-v6-1-2.js",
     serviceModule: "../ray__waf_v6-1-2/src/service.js",
@@ -148,6 +164,10 @@ const services = {
   "riversafe-waf": {
     entryFile: "../riversafe__waf/bin/riversafe-waf.js",
     serviceModule: "../riversafe__waf/src/service.js",
+  },
+  "ruijie-behavior-firewall-r2-3-2-t0": {
+    entryFile: "../ruijie__behavior_firewall_r2-3-2-t0/bin/ruijie-behavior-firewall-r2-3-2-t0.js",
+    serviceModule: "../ruijie__behavior_firewall_r2-3-2-t0/src/service.js",
   },
   "sangfor-fw-v8-0-45": {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
@@ -236,18 +256,6 @@ const services = {
   "wd-k01": {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
-  },
-  "tencent-bh": {
-    entryFile: "../tencent__bh/bin/tencent-bh.js",
-    serviceModule: "../tencent__bh/src/service.js",
-  },
-  "alibaba-sas": {
-    entryFile: "../alibaba__sas/bin/alibaba-sas.js",
-    serviceModule: "../alibaba__sas/src/service.js",
-  },
-  "misp": {
-    entryFile: "../misp__misp/bin/misp.js",
-    serviceModule: "../misp__misp/src/service.js",
   },
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",

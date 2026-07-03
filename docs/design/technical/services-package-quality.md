@@ -12,6 +12,12 @@ OctoBus service。
 dispatcher `octobus-tentacles`。根 `files` 必须覆盖每个 service root、根 `bin/`、
 validator/test/smoke 所需脚本，以及运行时需要的共享文件。
 
+当前 `services/` 依赖基线是 `@chaitin-ai/octobus-sdk` `^0.6.0`。根
+`services/package.json` 直接声明 `@chaitin-ai/octobus-sdk`、`commander`、`undici` 和
+`@alicloud/swas-open20200601`，并在 `bundledDependencies` 中打包这些运行时依赖。每个
+service root 的 `package.json` 是本地开发辅助，也应声明同一 SDK semver range，方便在
+service 目录内运行 focused 测试。
+
 本文描述该分发包的长期质量线。具体 service 的业务字段、上游 API 语义和 mock upstream
 细节由各 service root 的 README、proto、schema 和测试维护。
 
@@ -100,6 +106,44 @@ secret schema 文件本身是 package contract 的一部分，文件名为 `secr
 
 错误对象可以携带 HTTP status、body length、上游业务 code 或安全摘要，但不能携带完整 raw body 或
 secret-bearing 字段。
+
+## SDK Helper 复用边界
+
+service 可以复用 `@chaitin-ai/octobus-sdk` 提供的低层 helper，但 SDK helper 不拥有厂商 API
+的业务语义。是否替换本地逻辑，以 service-local README、proto、schema 和测试固定的错误码、
+message、details、response shape 为准。
+
+可优先复用的通用 helper 包括：
+
+- `grpcCodeFor`、`serviceError`、`missingSecretError`、`redactSensitive`、
+  `safeErrorSummary`：用于构造 gRPC error 和脱敏错误摘要。
+- `normalizeContext`、`mergeConfigSecret`、`getMetadataValue`：用于规范化 handler context、
+  合并 config/secret 和读取 metadata。
+- `normalizeTimeoutMs`、`createTlsDispatcher`、`fetchWithTimeout`、`readResponseText`、
+  `readResponseJson`、`assertOkResponse`：用于 timeout、TLS dispatcher、fetch 和 response
+  读取。
+
+复用时必须遵守以下边界：
+
+- `mergeConfigSecret(ctx)` 只合并 `ctx.config` 和 `ctx.secret`。如果 service 保留
+  `ctx.bindings` 兼容层，不得用该 helper 直接替换既有优先级；当前多数 service 仍需要保留
+  bindings 兼容逻辑。
+- `fetchWithTimeout` 会把 timeout 映射为 `DEADLINE_EXCEEDED`、外部 abort 映射为
+  `CANCELLED`、网络失败映射为 `UNAVAILABLE`。如果现有测试固定网络错误 message 或 cause，
+  应继续保留本地 fetch wrapper，只复用 `normalizeTimeoutMs` 等不改变错误对象的 helper。
+- `readResponseJson` 对非法 JSON 抛 `INTERNAL`。如果 service 当前要求非法 JSON 为
+  `UNKNOWN`，或需要保留原始 body 长度、截断摘要、业务 payload 字段，不能直接替换。
+- SDK 默认 HTTP status 映射会将 400 映射为 `INVALID_ARGUMENT`、404 映射为 `NOT_FOUND`。
+  如果 service 对上游 4xx 使用 `FAILED_PRECONDITION` 或自定义 `PERMISSION_DENIED`，必须保留
+  service-local 映射。
+- `protobuf-json.ts` 中的 JSON/descriptor helper 不等价于各 service 手写的
+  `google.protobuf.Value` object shape 转换；这些转换只有在测试证明完全等价时才能替换。
+
+当前 group robot services 已复用 SDK 中不改变业务语义的 helper：钉钉、飞书和 Slack group
+robot 使用 `grpcCodeFor` 和 `normalizeTimeoutMs`；飞书 group robot 还使用
+`createTlsDispatcher(true)` 提供模块级 TLS skip dispatcher。它们仍保留本地 config/secret/
+bindings 合并、fetch、response 读取和 HTTP status 映射，以维持既有错误 message、legacy 字段
+和 response payload shape。
 
 ## Validator、测试和 Coverage
 

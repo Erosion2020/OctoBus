@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -352,6 +353,152 @@ func TestAdminServiceImportRejectsUnsupportedContentType(t *testing.T) {
 	if !strings.Contains(body, "unsupported service import content type") || !strings.Contains(body, "application/json") || !strings.Contains(body, "multipart/form-data") {
 		t.Fatalf("unsupported content type response was not clear: %s", body)
 	}
+}
+
+func TestAdminServiceImportMultipartSetsUpload(t *testing.T) {
+	var uploadPath string
+	called := false
+	srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+		called = true
+		if opts.ServiceID != "echo" || opts.Source != "client-upload:fixture" || !opts.Offline || opts.Build != "never" {
+			t.Fatalf("unexpected multipart import options: %+v", opts)
+		}
+		if opts.Upload == nil {
+			t.Fatal("multipart import did not set upload")
+		}
+		if opts.Upload.Kind != packageimport.UploadKindDirectory || opts.Upload.DisplaySource != opts.Source {
+			t.Fatalf("unexpected upload metadata: %+v", opts.Upload)
+		}
+		uploadPath = opts.Upload.Path
+		got, err := os.ReadFile(uploadPath)
+		if err != nil {
+			t.Fatalf("fake importer could not read upload: %v", err)
+		}
+		if string(got) != "package bytes" {
+			t.Fatalf("upload body=%q", got)
+		}
+		return packageimport.Result{Service: domain.Service{ID: opts.ServiceID, Name: "Echo", RuntimeMode: domain.RuntimeModeOnDemand}}, nil
+	}}}
+	req := newMultipartServiceImportRequest(t,
+		multipartTestPart{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture","offline":true,"build":"never"}`},
+		multipartTestPart{name: "upload_kind", value: "directory"},
+		multipartTestPart{name: "package", filename: "package.tgz", value: "package bytes"},
+	)
+	w := httptest.NewRecorder()
+	srv.handleServiceImport(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !called {
+		t.Fatal("multipart service import did not call importer")
+	}
+	if uploadPath == "" {
+		t.Fatal("fake importer did not capture upload path")
+	}
+	if _, err := os.Stat(uploadPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("multipart upload temp file was not cleaned up: %v", err)
+	}
+}
+
+func TestAdminServiceImportMultipartValidationErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		parts []multipartTestPart
+		want  string
+	}{
+		{
+			name: "missing options",
+			parts: []multipartTestPart{
+				{name: "upload_kind", value: "directory"},
+				{name: "package", filename: "package.tgz", value: "package bytes"},
+			},
+			want: "options part is required",
+		},
+		{
+			name: "missing package",
+			parts: []multipartTestPart{
+				{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture"}`},
+				{name: "upload_kind", value: "directory"},
+			},
+			want: "package part is required",
+		},
+		{
+			name: "invalid upload kind",
+			parts: []multipartTestPart{
+				{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture"}`},
+				{name: "upload_kind", value: "other"},
+				{name: "package", filename: "package.tgz", value: "package bytes"},
+			},
+			want: "invalid multipart service import upload_kind",
+		},
+		{
+			name: "invalid options json",
+			parts: []multipartTestPart{
+				{name: "package", filename: "package.tgz", value: "package bytes"},
+				{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture","unknown":true}`},
+				{name: "upload_kind", value: "directory"},
+			},
+			want: "decode multipart options",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tempRoot := t.TempDir()
+			t.Setenv("TMPDIR", tempRoot)
+			srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+				t.Fatal("importer should not be called for invalid multipart request")
+				return packageimport.Result{}, nil
+			}}}
+			w := httptest.NewRecorder()
+			srv.handleServiceImport(w, newMultipartServiceImportRequest(t, tc.parts...))
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.want) {
+				t.Fatalf("body=%s want %q", w.Body.String(), tc.want)
+			}
+			entries, err := os.ReadDir(tempRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("multipart temp dir was not cleaned after error: %+v", entries)
+			}
+		})
+	}
+}
+
+type multipartTestPart struct {
+	name     string
+	filename string
+	value    string
+}
+
+func newMultipartServiceImportRequest(t *testing.T, parts ...multipartTestPart) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for _, part := range parts {
+		var w io.Writer
+		var err error
+		if part.filename == "" {
+			w, err = writer.CreateFormField(part.name)
+		} else {
+			w, err = writer.CreateFormFile(part.name, part.filename)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(w, part.value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/services/import", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req
 }
 
 func TestAdminRecursiveServiceImportValidation(t *testing.T) {

@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -456,7 +458,108 @@ func readServiceImportRequest(r *http.Request) (packageimport.Options, func(), e
 }
 
 func readMultipartServiceImport(r *http.Request) (packageimport.Options, func(), error) {
-	return packageimport.Options{}, nil, errors.New("multipart service import is not implemented")
+	mr, err := r.MultipartReader()
+	if err != nil {
+		return packageimport.Options{}, nil, fmt.Errorf("read multipart service import: %w", err)
+	}
+	var req packageimport.Options
+	var uploadKind packageimport.UploadKind
+	var uploadPath string
+	var tempDir string
+	var haveOptions, haveUploadKind, havePackage bool
+	cleanup := func() {
+		if tempDir != "" {
+			_ = os.RemoveAll(tempDir)
+		}
+	}
+	fail := func(err error) (packageimport.Options, func(), error) {
+		cleanup()
+		return packageimport.Options{}, nil, err
+	}
+	for {
+		part, err := mr.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fail(fmt.Errorf("read multipart service import: %w", err))
+		}
+		switch part.FormName() {
+		case "options":
+			if haveOptions {
+				return fail(errors.New("multipart service import contains duplicate options part"))
+			}
+			if err := decodeStrictJSON(part, &req); err != nil {
+				return fail(fmt.Errorf("decode multipart options: %w", err))
+			}
+			haveOptions = true
+		case "upload_kind":
+			if haveUploadKind {
+				return fail(errors.New("multipart service import contains duplicate upload_kind field"))
+			}
+			raw, err := io.ReadAll(part)
+			if err != nil {
+				return fail(fmt.Errorf("read multipart upload_kind: %w", err))
+			}
+			uploadKind, err = parseMultipartUploadKind(strings.TrimSpace(string(raw)))
+			if err != nil {
+				return fail(err)
+			}
+			haveUploadKind = true
+		case "package":
+			if havePackage {
+				return fail(errors.New("multipart service import contains duplicate package part"))
+			}
+			if tempDir == "" {
+				tempDir, err = os.MkdirTemp("", "octobus-service-import-*")
+				if err != nil {
+					return fail(fmt.Errorf("create service import upload temp dir: %w", err))
+				}
+			}
+			uploadPath = filepath.Join(tempDir, "package")
+			out, err := os.OpenFile(uploadPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+			if err != nil {
+				return fail(fmt.Errorf("create service import upload file: %w", err))
+			}
+			_, copyErr := io.Copy(out, part)
+			closeErr := out.Close()
+			if copyErr != nil {
+				return fail(fmt.Errorf("save service import upload: %w", copyErr))
+			}
+			if closeErr != nil {
+				return fail(fmt.Errorf("save service import upload: %w", closeErr))
+			}
+			havePackage = true
+		case "":
+			return fail(errors.New("multipart service import contains unnamed part"))
+		default:
+			return fail(fmt.Errorf("unexpected multipart service import field %q", part.FormName()))
+		}
+	}
+	if !haveOptions {
+		return fail(errors.New("multipart service import options part is required"))
+	}
+	if !haveUploadKind {
+		return fail(errors.New("multipart service import upload_kind field is required"))
+	}
+	if !havePackage {
+		return fail(errors.New("multipart service import package part is required"))
+	}
+	req.Upload = &packageimport.UploadedSource{
+		Kind:          uploadKind,
+		Path:          uploadPath,
+		DisplaySource: req.Source,
+	}
+	return req, cleanup, nil
+}
+
+func parseMultipartUploadKind(raw string) (packageimport.UploadKind, error) {
+	switch kind := packageimport.UploadKind(raw); kind {
+	case packageimport.UploadKindDirectory, packageimport.UploadKindArchive, packageimport.UploadKindNPMLocal:
+		return kind, nil
+	default:
+		return "", fmt.Errorf("invalid multipart service import upload_kind %q: expected directory, archive, or npm-local", raw)
+	}
 }
 
 func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Request, req packageimport.Options) {
@@ -1369,7 +1472,11 @@ func echoErrorStatus(err error) int {
 
 func readJSON(r *http.Request, out any) error {
 	defer r.Body.Close()
-	dec := json.NewDecoder(r.Body)
+	return decodeStrictJSON(r.Body, out)
+}
+
+func decodeStrictJSON(r io.Reader, out any) error {
+	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
 	return dec.Decode(out)
 }

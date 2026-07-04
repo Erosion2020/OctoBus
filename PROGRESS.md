@@ -140,20 +140,28 @@
       - `multipart/form-data` 当前只完成分流占位，实际 options/package 解析和 cleanup 留给 2.2。
     - 下一目标：2.2 multipart 解析与临时文件。
 
-- [ ] 2.2 解析 multipart 并设置 `Options.Upload`
+- [x] 2.2 解析 multipart 并设置 `Options.Upload`
   - 依赖：2.1。
   - 工作内容：实现 `readMultipartServiceImport`，读取 `options` JSON、`upload_kind` 和 `package` part，把上传内容流式保存到 daemon 临时目录，返回带 `Options.Upload` 的 `packageimport.Options` 和 cleanup 函数。
   - 可并行子任务：
-    - [ ] 可并行：实现 multipart happy path 解析和 fake importer 断言。
-    - [ ] 可并行：实现缺少 `options`、缺少 `package`、非法 `upload_kind`、非法 JSON 的错误处理。
-    - [ ] 可并行：实现临时目录 cleanup，并覆盖成功和失败路径。
+    - [x] 可并行：实现 multipart happy path 解析和 fake importer 断言。
+    - [x] 可并行：实现缺少 `options`、缺少 `package`、非法 `upload_kind`、非法 JSON 的错误处理。
+    - [x] 可并行：实现临时目录 cleanup，并覆盖成功和失败路径。
   - 测试方案：`go test ./internal/admin`。
   - 验收标准：fake importer 能读取 `opts.Upload.Path`；请求结束后临时目录清理；错误路径不泄露临时路径或请求体。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/admin/admin.go` 实现 `readMultipartServiceImport`，读取 `options`、`upload_kind` 和 `package` part。
+      - multipart `options` 复用 strict JSON 解码规则；`upload_kind` 映射到 `packageimport.UploadKindDirectory`、`UploadKindArchive` 或 `UploadKindNPMLocal`。
+      - `package` part 通过 `io.Copy` 流式保存到 `os.MkdirTemp("", "octobus-service-import-*")` 创建的 daemon 临时目录，并设置 `Options.Upload` 的 kind、path 和 display source。
+      - 解析失败立即清理临时目录；成功路径通过 handler defer 在 importer 返回后清理。
+      - 在 `internal/admin/admin_test.go` 增加 multipart happy path fake importer 断言，以及缺少 `options`、缺少 `package`、非法 `upload_kind`、非法 options JSON 的错误测试和 TMPDIR cleanup 断言。
+    - 验证：
+      - `go test ./internal/admin` 通过。
+    - 审计与例外：
+      - 错误响应不包含 daemon 临时路径或 multipart body；测试通过 fake importer 读取上传文件并在响应后确认文件已删除。
+      - NDJSON streaming、recursive aggregate 和 token middleware 复用语义留给 2.3/2.4 覆盖。
     - 下一目标：2.3 multipart streaming 和 recursive。
 
 - [ ] 2.3 复用 streaming、recursive 和 restart 语义

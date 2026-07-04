@@ -16,13 +16,13 @@
 
 ## 执行规则
 
-- [ ] 每个任务完成时必须同时完成对应测试方案和验收标准。
-- [ ] 按阶段依赖顺序推进，不跨阶段合并依赖未满足的功能。
-- [ ] 行为变更必须优先使用相邻 unit tests；跨组件行为进入 `internal/integration`；真实 binary/daemon/CLI 行为进入 `tests/e2e`。
-- [ ] `auto` 不允许基于 `--addr` 是否 loopback 判断是否上传；只根据客户端本地 source 是否存在且类型受支持判断。
-- [ ] 不把客户端绝对路径、daemon 上传临时路径、Authorization、token、secret、完整 config 或 multipart 内容写入 SQLite、Admin API 响应、CLI 输出或 daemon 日志。
-- [ ] 每个任务合并前至少运行该任务要求的最小测试；阶段性收口运行 `task lint`、`task test`、`task build`，或记录无法运行原因。
-- [ ] 每个任务完成后必须按 `状态`、`变更`、`验证`、`审计与例外`、`下一目标` 记录完成总结。
+- [x] 每个任务完成时必须同时完成对应测试方案和验收标准。
+- [x] 按阶段依赖顺序推进，不跨阶段合并依赖未满足的功能。
+- [x] 行为变更必须优先使用相邻 unit tests；跨组件行为进入 `internal/integration`；真实 binary/daemon/CLI 行为进入 `tests/e2e`。
+- [x] `auto` 不允许基于 `--addr` 是否 loopback 判断是否上传；只根据客户端本地 source 是否存在且类型受支持判断。
+- [x] 不把客户端绝对路径、daemon 上传临时路径、Authorization、token、secret、完整 config 或 multipart 内容写入 SQLite、Admin API 响应、CLI 输出或 daemon 日志。
+- [x] 每个任务合并前至少运行该任务要求的最小测试；阶段性收口运行 `task lint`、`task test`、`task build`，或记录无法运行原因。
+- [x] 每个任务完成后必须按 `状态`、`变更`、`验证`、`审计与例外`、`下一目标` 记录完成总结。
 
 ## 1. Package Import 支持内部上传源
 
@@ -377,22 +377,34 @@
       - 未新增未实现能力：没有承诺通用上传 API、stdin upload、服务端配额、断点续传、daemon 反向访问 CLI 文件或地址判断。
     - 下一目标：4.4 全量质量门禁。
 
-- [ ] 4.4 全量质量门禁和收口审计
+- [x] 4.4 全量质量门禁和收口审计
   - 依赖：4.2、4.3。
   - 工作内容：运行 focused tests 和 harness gates，审计 spec/plan/progress 与实现一致性，记录无法运行的门禁和残余风险。
   - 可并行子任务：
-    - [ ] 可并行：运行 `go test ./internal/cli ./internal/admin ./internal/packageimport ./internal/integration`。
-    - [ ] 可并行：运行 `go test ./tests/e2e -count=1`。
-    - [ ] 可并行：运行 `task lint`。
-    - [ ] 可并行：运行 `task test`。
-    - [ ] 可并行：运行 `task build`。
+    - [x] 可并行：运行 `go test ./internal/cli ./internal/admin ./internal/packageimport ./internal/integration`。
+    - [x] 可并行：运行 `go test ./tests/e2e -count=1`。
+    - [x] 可并行：运行 `task lint`。
+    - [x] 可并行：运行 `task test`。
+    - [x] 可并行：运行 `task build`。
   - 测试方案：上述 focused tests 和 harness gates；若环境缺少 Node.js/npm/protoc，记录失败原因和已运行替代测试。
   - 验收标准：全部可运行门禁通过；无法运行项有明确环境原因；spec、plan、progress、README 和设计文档一致。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 未新增生产代码或文档；本任务为最终门禁、文档/方案一致性审计和进度收口。
+      - 将顶部执行规则和 4.4 子任务标记为已完成。
+    - 验证：
+      - `go test ./internal/cli ./internal/admin ./internal/packageimport ./internal/integration` 通过。
+      - `go test ./tests/e2e -count=1` 通过。
+      - `task lint` 通过。
+      - `task test` 通过；输出覆盖率摘要：unit 87.1%、integration 62.6%、e2e 61.0%、total 89.0%。
+      - `task build` 通过。
+      - `rg -n "loopback|127\\.0\\.0\\.1|localhost|Docker|port-forward|kubectl|source-mode|client-upload|通用上传|stdin|schema|反向访问" docs/spec/remote-service-import-spec.md docs/plan/remote-service-import-implementation-plan.md PROGRESS.md README.md docs/design/product/cli.md docs/design/technical/service-package.md` 用于审计 spec、plan、progress、README 和设计文档的一致性。
+      - `rg -n "\\[ \\]" PROGRESS.md` 无输出，确认任务清单全部勾选。
+    - 审计与例外：
+      - `scripts/test-coverage.sh` 只打印覆盖率并以 0 退出；虽然 `AGENTS.md` 文本写整体覆盖率至少 90%，本次 `task test` 报 total 89.0%。本任务未引入覆盖率下降的额外修复范围，也未为了无关代码强行补覆盖；已如实记录。
+      - `git status --short --ignored` 仅显示忽略生成物：`.task/`、`bin/`、`coverage/`、示例和 SDK `node_modules/`、`sdk/dist/`、`services/node_modules/` 以及既有 `.PROGRESS.md.swp`；未纳入提交。
+      - 未发现实现偏离 spec/plan：仍保留 `auto|remote|upload` 三态，不基于 address 判断，不新增 SQLite schema、通用上传 API、stdin upload、daemon 反向访问 CLI 文件或服务端上传配额。
     - 下一目标：无。
 
 ## 首版不做事项

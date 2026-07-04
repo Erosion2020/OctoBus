@@ -330,20 +330,27 @@
       - E2E 真实 binary/daemon/CLI 覆盖仍未执行，按计划留给 4.2。
     - 下一目标：4.2 e2e 覆盖。
 
-- [ ] 4.2 增加真实 binary E2E 覆盖
+- [x] 4.2 增加真实 binary E2E 覆盖
   - 依赖：4.1。
   - 工作内容：在 `tests/e2e` 增加真实 daemon + CLI 场景，使用 loopback daemon 地址但不同工作目录，验证默认 `auto` 上传本地 fixture 并导入成功。
   - 可并行子任务：
-    - [ ] 可并行：复用 `tests/e2e/harness_test.go` fixture 和 CLI helper 设计测试。
-    - [ ] 可并行：补充持久化断言，确认 service row `package_source` 不含客户端绝对路径。
-    - [ ] 可并行：运行 e2e focused case 或完整 `go test ./tests/e2e -count=1`。
+    - [x] 可并行：复用 `tests/e2e/harness_test.go` fixture 和 CLI helper 设计测试。
+    - [x] 可并行：补充持久化断言，确认 service row `package_source` 不含客户端绝对路径。
+    - [x] 可并行：运行 e2e focused case 或完整 `go test ./tests/e2e -count=1`。
   - 测试方案：`go test ./tests/e2e -count=1`。
   - 验收标准：真实 binary/daemon/CLI 流程通过；测试不依赖固定端口、用户 home、外部网络或 npm registry。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `tests/e2e/harness_test.go` 增加 `runCLIInDir` 和 `mustCLIInDir`，允许黑盒 CLI 场景指定客户端工作目录。
+      - 新增 `tests/e2e/service_import_upload_test.go`，使用真实 binary 启动 daemon，并在客户端 fixture 目录中执行 `octobus service import echo --offline .`。
+      - 测试断言 service row 的 `package_source` 为 `client-upload:<fixture-basename>`，且不包含客户端 fixture 绝对路径或客户端根目录；同时确认 package 和 descriptor hash 已持久化。
+    - 验证：
+      - `go test ./tests/e2e -run TestServiceImportAutoUploadsClientLocalDirectory -count=1` 通过。
+      - `go test ./tests/e2e -count=1` 通过。
+    - 审计与例外：
+      - 新增测试复用真实 e2e harness，不依赖固定端口、用户 home、外部网络或 npm registry；仅通过 SQLite 读做持久化断言。
+      - daemon 和 CLI 在同一测试主机上运行，无法物理隔离文件系统；测试通过 `SOURCE="."` 和不同 CLI 工作目录证明默认 `auto` 选择上传路径，并以 `client-upload:` 持久化作为黑盒证据。
     - 下一目标：4.3 文档更新。
 
 - [ ] 4.3 更新用户文档和设计文档

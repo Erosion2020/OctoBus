@@ -73,20 +73,26 @@
       - recursive import 的 `client-upload:<basename>//<discovered-root>` 持久化语义尚未调整，按计划留给 1.3。
     - 下一目标：1.3 上传 source 持久化和 recursive 行为。
 
-- [ ] 1.3 固定上传 source 持久化和 recursive 语义
+- [x] 1.3 固定上传 source 持久化和 recursive 语义
   - 依赖：1.2。
   - 工作内容：调整 `recursiveBasePackageSource` 或相关 helper，让 `client-upload:<basename>//scan-root` 在 recursive import 中为每个 discovered service 记录 `client-upload:<basename>//<discovered-root>`；确保单 service `//service-dir` 仍记录为 `client-upload:<basename>//<service-root>`。
   - 可并行子任务：
-    - [ ] 可并行：补充 single service 上传目录带 `//service-dir` 的测试。
-    - [ ] 可并行：补充 recursive 上传目录发现多个 service root 的测试。
-    - [ ] 可并行：审计 `PackageSource`、Admin 响应和 CLI 输出是否可能泄露临时路径。
+    - [x] 可并行：补充 single service 上传目录带 `//service-dir` 的测试。
+    - [x] 可并行：补充 recursive 上传目录发现多个 service root 的测试。
+    - [x] 可并行：审计 `PackageSource`、Admin 响应和 CLI 输出是否可能泄露临时路径。
   - 测试方案：`go test ./internal/packageimport`。
   - 验收标准：上传 recursive import 的每个 service `PackageSource` 稳定、可读、无临时路径；现有 Git/npm/local recursive 行为不回归。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/packageimport/importer_test.go` 增加上传目录单 service `//service-dir` 导入测试，断言 `PackageSource`、`ServiceRoot`、`NodeEntry` 和 store 持久化值。
+      - 增加上传目录 recursive scan root 测试，断言 `client-upload:<basename>//nested` 最终持久化为 `client-upload:<basename>//nested/vendor__gamma`。
+      - 审阅 `ImportRecursive` 中 `splitSourceServiceRoot`、`recursiveBasePackageSource` 和 `sourceWithServiceRootForPackage` 组合；现有非 Git fallback 已能去除 scan root 并重组 discovered service root，无需改生产代码。
+    - 验证：
+      - `go test ./internal/packageimport` 通过。
+    - 审计与例外：
+      - 新增断言确认上传临时文件路径没有进入 `PackageSource`。
+      - 本阶段只覆盖 `internal/packageimport` 的持久化语义；Admin 响应和 CLI 输出泄露审计将在阶段 2/3 接入 multipart 后继续覆盖。
     - 下一目标：1.4 packageimport 阶段收口。
 
 - [ ] 1.4 Package Import 阶段收口

@@ -183,6 +183,39 @@ message ListResponse { string text = 1; }
 	}
 }
 
+func TestImporterImportsUploadedDirectoryPackageServiceRoot(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeMultiServiceTestPackage(t, t.TempDir())
+	uploadPath := filepath.Join(t.TempDir(), "multi-upload.tgz")
+	if err := tarGzDir(pkg.Root, uploadPath); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+		ServiceID: "alpha-service",
+		Source:    "client-upload:multi-upload//vendor__alpha",
+		Upload:    &UploadedSource{Kind: UploadKindDirectory, Path: uploadPath},
+		Build:     "never",
+		Offline:   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Service.PackageSource != "client-upload:multi-upload//vendor__alpha" || res.Service.ServiceRoot != "vendor__alpha" || res.Service.NodeEntry != filepath.Clean("bin/alpha-service.js") {
+		t.Fatalf("uploaded service-root metadata mismatch: %+v", res.Service)
+	}
+	if strings.Contains(res.Service.PackageSource, uploadPath) {
+		t.Fatalf("uploaded service-root package source leaked a local path: %+v", res.Service)
+	}
+	stored, err := s.GetService(context.Background(), "alpha-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PackageSource != res.Service.PackageSource || stored.ServiceRoot != res.Service.ServiceRoot {
+		t.Fatalf("stored uploaded service-root metadata mismatch: %+v", stored)
+	}
+}
+
 func TestImporterImportRecursiveImportsMultiServicePackage(t *testing.T) {
 	dataDir, s := openTestStore(t)
 	pkg := writeMultiServiceTestPackage(t, t.TempDir())
@@ -245,6 +278,43 @@ func TestImporterImportRecursiveImportsMultiServicePackage(t *testing.T) {
 		if stored.PackageSource != svc.PackageSource || stored.ServiceRoot != svc.ServiceRoot {
 			t.Fatalf("stored service %s mismatch: %+v", want.ID, stored)
 		}
+	}
+}
+
+func TestImporterImportRecursiveUploadedDirectoryPackageSources(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeMultiServiceTestPackage(t, t.TempDir())
+	uploadPath := filepath.Join(t.TempDir(), "multi-upload.tgz")
+	if err := tarGzDir(pkg.Root, uploadPath); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := (&Importer{DataDir: dataDir, Store: s}).ImportRecursive(context.Background(), Options{
+		Source:    "client-upload:multi-upload//nested",
+		Upload:    &UploadedSource{Kind: UploadKindDirectory, Path: uploadPath},
+		Recursive: true,
+		Build:     "never",
+		Offline:   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ServiceCount != 1 || len(res.Services) != 1 {
+		t.Fatalf("unexpected uploaded recursive result: %+v", res)
+	}
+	svc := res.Services[0]
+	if svc.ID != "gamma-service" || svc.ServiceRoot != "nested/vendor__gamma" || svc.PackageSource != "client-upload:multi-upload//nested/vendor__gamma" {
+		t.Fatalf("uploaded recursive service metadata mismatch: %+v", svc)
+	}
+	if strings.Contains(svc.PackageSource, uploadPath) {
+		t.Fatalf("uploaded recursive package source leaked upload path: %+v", svc)
+	}
+	stored, err := s.GetService(context.Background(), "gamma-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PackageSource != svc.PackageSource || stored.ServiceRoot != svc.ServiceRoot {
+		t.Fatalf("stored uploaded recursive metadata mismatch: %+v", stored)
 	}
 }
 

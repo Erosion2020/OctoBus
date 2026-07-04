@@ -1,0 +1,322 @@
+# 远程 Service Import 本地资源上传 Progress
+
+本文档把远程 `service import` 本地资源上传能力拆成可独立执行、独立验收的任务清单。任务按依赖顺序排列；标记为“可并行”的子任务可以在同一父任务内并行推进，但 subagent 并发度最高不超过 5。
+
+## 文档索引
+
+- 技术方案：[docs/spec/remote-service-import-spec.md](docs/spec/remote-service-import-spec.md)
+- 实施计划：[docs/plan/remote-service-import-implementation-plan.md](docs/plan/remote-service-import-implementation-plan.md)
+- Harness：[AGENTS.md](AGENTS.md)
+- Task 工作流：[Taskfile.yml](Taskfile.yml)
+- CI 配置：[.github/workflows/ci.yml](.github/workflows/ci.yml)
+- E2E 约定：[tests/e2e/README.md](tests/e2e/README.md)
+- CLI 设计：[docs/design/product/cli.md](docs/design/product/cli.md)
+- Service package 设计：[docs/design/technical/service-package.md](docs/design/technical/service-package.md)
+- 运行与安全约束：[docs/design/product/operations.md](docs/design/product/operations.md)、[docs/design/product/security.md](docs/design/product/security.md)
+
+## 执行规则
+
+- [ ] 每个任务完成时必须同时完成对应测试方案和验收标准。
+- [ ] 按阶段依赖顺序推进，不跨阶段合并依赖未满足的功能。
+- [ ] 行为变更必须优先使用相邻 unit tests；跨组件行为进入 `internal/integration`；真实 binary/daemon/CLI 行为进入 `tests/e2e`。
+- [ ] `auto` 不允许基于 `--addr` 是否 loopback 判断是否上传；只根据客户端本地 source 是否存在且类型受支持判断。
+- [ ] 不把客户端绝对路径、daemon 上传临时路径、Authorization、token、secret、完整 config 或 multipart 内容写入 SQLite、Admin API 响应、CLI 输出或 daemon 日志。
+- [ ] 每个任务合并前至少运行该任务要求的最小测试；阶段性收口运行 `task lint`、`task test`、`task build`，或记录无法运行原因。
+- [ ] 每个任务完成后必须按 `状态`、`变更`、`验证`、`审计与例外`、`下一目标` 记录完成总结。
+
+## 1. Package Import 支持内部上传源
+
+参考文档：[实施计划阶段 1](docs/plan/remote-service-import-implementation-plan.md#阶段-1package-import-支持内部上传源)。
+
+- [x] 1.1 定义上传源内部模型
+  - 依赖：无。
+  - 工作内容：在 `internal/packageimport` 增加 `UploadKind`、`UploadedSource` 和 `Options.Upload *UploadedSource`，确保 `json:"-"`，只供 Admin multipart 入口内部设置；保持现有 JSON `packageimport.Options` wire shape 不变。
+  - 可并行子任务：
+    - [x] 可并行：审阅 `internal/packageimport/importer.go` 中 `Options`、`preparedSource`、`prepareSource`、`Import`、`ImportRecursive` 的调用链，确认新增字段不会影响 JSON API。
+    - [x] 可并行：在 `internal/packageimport/importer_test.go` 添加字段不可由 JSON 设置或 JSON marshal 不暴露的 focused 断言。
+  - 测试方案：`go test ./internal/packageimport`。
+  - 验收标准：现有 importer JSON source 测试不回归；新增 `Options.Upload` 不出现在 JSON 编码中。
+  - 完成总结：
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/packageimport/importer.go` 增加 `UploadKind`、`UploadedSource` 和 `Options.Upload *UploadedSource`。
+      - `Options.Upload` 使用 `json:"-"`，与现有 `Progress` 一样只作为进程内字段，不进入 Admin JSON wire shape。
+      - 在 `internal/packageimport/importer_test.go` 增加 `TestOptionsUploadIsInternalOnly`，覆盖 marshal 不暴露内部字段、unmarshal 不能从 JSON 设置上传源。
+    - 验证：
+      - `go test ./internal/packageimport` 通过。
+    - 审计与例外：
+      - 已审阅 `Options`、`Import`、`ImportRecursive`、`prepareSource` 和 `preparedSource` 调用链；本任务只添加内部模型，未改变 source preparation 分支。
+      - 未实现 `prepareUploadedSource`，按计划留给 1.2。
+    - 下一目标：1.2 上传源 prepare 流程。
+
+- [ ] 1.2 实现 `prepareUploadedSource`
+  - 依赖：1.1。
+  - 工作内容：在 `prepareSource` 开头分支 `opts.Upload != nil`，实现 daemon 临时上传文件到 `preparedSource` 的转换；上传目录和 `npm-local` 目录解包为 package root 且 `BuildAllowed=true`，上传 archive 解包并 `BuildAllowed=false`，`PackageSource` 使用 `client-upload:<basename>` 及 `//service-root`。
+  - 可并行子任务：
+    - [ ] 可并行：实现上传目录 tar.gz 解包、sha256、`PackageDir` 和 `PackageSource` 处理。
+    - [ ] 可并行：实现上传 archive `.tgz/.tar.gz/.zip` 解包、`normalizePackageDir` 和 `BuildAllowed=false` 处理。
+    - [ ] 可并行：实现 `npm-local` 上传类型校验，首版只接受目录和现有 archive 后缀。
+  - 测试方案：`go test ./internal/packageimport`。
+  - 验收标准：上传目录、上传 archive、上传 `npm-local` 均可生成正确 `preparedSource`；错误信息包含有用上下文；不读取客户端原始路径。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：1.3 上传 source 持久化和 recursive 行为。
+
+- [ ] 1.3 固定上传 source 持久化和 recursive 语义
+  - 依赖：1.2。
+  - 工作内容：调整 `recursiveBasePackageSource` 或相关 helper，让 `client-upload:<basename>//scan-root` 在 recursive import 中为每个 discovered service 记录 `client-upload:<basename>//<discovered-root>`；确保单 service `//service-dir` 仍记录为 `client-upload:<basename>//<service-root>`。
+  - 可并行子任务：
+    - [ ] 可并行：补充 single service 上传目录带 `//service-dir` 的测试。
+    - [ ] 可并行：补充 recursive 上传目录发现多个 service root 的测试。
+    - [ ] 可并行：审计 `PackageSource`、Admin 响应和 CLI 输出是否可能泄露临时路径。
+  - 测试方案：`go test ./internal/packageimport`。
+  - 验收标准：上传 recursive import 的每个 service `PackageSource` 稳定、可读、无临时路径；现有 Git/npm/local recursive 行为不回归。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：1.4 packageimport 阶段收口。
+
+- [ ] 1.4 Package Import 阶段收口
+  - 依赖：1.1、1.2、1.3。
+  - 工作内容：运行本阶段 focused tests，修复 packageimport 内部 regressions，确认 `--build=always` 对上传 archive 保持现有 archive 错误语义。
+  - 可并行子任务：
+    - [ ] 可并行：审阅 `internal/packageimport/importer_test.go` 是否覆盖 upload directory、archive、npm-local、recursive、source root。
+    - [ ] 可并行：运行并记录 focused test 结果。
+  - 测试方案：`go test ./internal/packageimport`。
+  - 验收标准：本阶段所有 packageimport 上传源测试通过；未设置 `Options.Upload` 的现有 source 行为不变。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：2.1 Admin multipart 解析。
+
+## 2. Admin API 接受 Multipart Import
+
+参考文档：[实施计划阶段 2](docs/plan/remote-service-import-implementation-plan.md#阶段-2admin-api-接受-multipart-import)。
+
+- [ ] 2.1 实现 import 请求 Content-Type 分流
+  - 依赖：1.4。
+  - 工作内容：在 `internal/admin/admin.go` 的 `handleServiceImport` 中按 `Content-Type` 分流 JSON 和 `multipart/form-data`；JSON 路径保持现有 `readJSON` 和 streaming 行为，未知类型返回明确 `400`。
+  - 可并行子任务：
+    - [ ] 可并行：补充 JSON import 兼容测试，确认旧请求仍调用 fake importer。
+    - [ ] 可并行：补充未知 Content-Type 错误测试。
+  - 测试方案：`go test ./internal/admin`。
+  - 验收标准：现有 Admin JSON import 测试不需要改成 multipart；错误响应清晰。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：2.2 multipart 解析与临时文件。
+
+- [ ] 2.2 解析 multipart 并设置 `Options.Upload`
+  - 依赖：2.1。
+  - 工作内容：实现 `readMultipartServiceImport`，读取 `options` JSON、`upload_kind` 和 `package` part，把上传内容流式保存到 daemon 临时目录，返回带 `Options.Upload` 的 `packageimport.Options` 和 cleanup 函数。
+  - 可并行子任务：
+    - [ ] 可并行：实现 multipart happy path 解析和 fake importer 断言。
+    - [ ] 可并行：实现缺少 `options`、缺少 `package`、非法 `upload_kind`、非法 JSON 的错误处理。
+    - [ ] 可并行：实现临时目录 cleanup，并覆盖成功和失败路径。
+  - 测试方案：`go test ./internal/admin`。
+  - 验收标准：fake importer 能读取 `opts.Upload.Path`；请求结束后临时目录清理；错误路径不泄露临时路径或请求体。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：2.3 multipart streaming 和 recursive。
+
+- [ ] 2.3 复用 streaming、recursive 和 restart 语义
+  - 依赖：2.2。
+  - 工作内容：确保 multipart 请求在 `Accept: application/x-ndjson` 下进入现有 streaming import；`recursive=true` 时走 `ImportRecursive` 并复用现有 recursive validation；普通响应和 degraded restart 语义不变。
+  - 可并行子任务：
+    - [ ] 可并行：补充 multipart NDJSON streaming complete/error 测试。
+    - [ ] 可并行：补充 multipart recursive import validation 和 aggregate response 测试。
+    - [ ] 可并行：审计 admin logger 字段，避免记录 multipart body、token、secret、临时路径。
+  - 测试方案：`go test ./internal/admin`。
+  - 验收标准：multipart 单 service、recursive、NDJSON 三条路径均到达 importer；现有 JSON streaming 测试不回归。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：2.4 Admin 阶段收口。
+
+- [ ] 2.4 Admin 阶段收口
+  - 依赖：2.1、2.2、2.3。
+  - 工作内容：运行 admin focused tests，修复兼容性和 cleanup 问题；确认 admin token middleware 对 multipart 请求仍生效。
+  - 可并行子任务：
+    - [ ] 可并行：运行并记录 `go test ./internal/admin`。
+    - [ ] 可并行：审阅 `internal/admin/admin_test.go` 新增覆盖是否包含错误路径和 cleanup。
+  - 测试方案：`go test ./internal/admin`。
+  - 验收标准：Admin multipart 能力可用且 JSON import 兼容；无临时文件残留测试失败。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：3.1 CLI source-mode。
+
+## 3. CLI Source Mode 和 Multipart 上传
+
+参考文档：[实施计划阶段 3](docs/plan/remote-service-import-implementation-plan.md#阶段-3cli-实现-source-mode-和-multipart-上传)。
+
+- [ ] 3.1 增加 `--source-mode` 并实现本地 source 判定
+  - 依赖：2.4。
+  - 工作内容：在 `service import` 增加 `--source-mode auto|upload|remote`；实现本地 source 解析 helper，支持目录、`.tgz/.tar.gz/.zip` 和 `npm:` local path；`auto` 不使用 `--addr` 判断。
+  - 可并行子任务：
+    - [ ] 可并行：实现 flag、参数校验和 help 文案。
+    - [ ] 可并行：实现 local source classification，包括 `npm:`、`//service-dir` 和 recursive scan root。
+    - [ ] 可并行：补充 `auto`、`upload`、`remote` source mode 单元测试。
+  - 测试方案：`go test ./internal/cli`。
+  - 验收标准：本地 source 存在且类型受支持时 `auto` 判定为上传；`remote` 永远走 JSON；`upload` 对不存在或不支持 source fail-fast。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：3.2 CLI multipart 请求。
+
+- [ ] 3.2 实现 CLI multipart 请求和目录打包
+  - 依赖：3.1。
+  - 工作内容：实现 service import multipart request helper；上传目录时流式生成 `package/` 根 tar.gz，上传 archive 时流式读取文件；设置 `options`、`upload_kind`、`package` part 和 `Accept: application/x-ndjson`。
+  - 可并行子任务：
+    - [ ] 可并行：实现 multipart request builder 和 admin token header 复用。
+    - [ ] 可并行：实现目录 tar.gz 流式打包，跳过 symlink 和非 regular file。
+    - [ ] 可并行：实现 archive 文件流式上传。
+    - [ ] 可并行：补充 multipart 请求体解析测试，断言 `options.source` 不含客户端绝对路径。
+  - 测试方案：`go test ./internal/cli`。
+  - 验收标准：CLI multipart 请求可被测试 server 解析；`options.source` 为 `client-upload:<basename>` 或带 service root；上传请求仍复用 progress stream handler。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：3.3 CLI 兼容性和回归。
+
+- [ ] 3.3 调整 CLI JSON 路径兼容测试
+  - 依赖：3.2。
+  - 工作内容：保留现有 JSON request 路径用于 `--source-mode remote` 和本地不存在 source；调整 `TestServiceImportRequestConvertsLocalSourceToAbsolutePath` 等旧断言，使默认 `auto` 的新行为断言 multipart。
+  - 可并行子任务：
+    - [ ] 可并行：更新 local path absolute normalize 相关测试。
+    - [ ] 可并行：补充 localhost/Docker 映射语义测试，`--addr 127.0.0.1` 且本地 source 存在时仍上传。
+    - [ ] 可并行：补充 Git/npm registry/HTTP source 保持 JSON 的回归测试。
+  - 测试方案：`go test ./internal/cli`。
+  - 验收标准：默认 `auto` 行为与 spec 一致；现有 remote/Git/npm/HTTP source 不回归；CLI 输出和错误语义清晰。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：3.4 CLI 阶段收口。
+
+- [ ] 3.4 CLI 阶段收口
+  - 依赖：3.1、3.2、3.3。
+  - 工作内容：运行 CLI focused tests，修复 request helper、timeout、Authorization、stream output 和 redaction 回归。
+  - 可并行子任务：
+    - [ ] 可并行：运行并记录 `go test ./internal/cli`。
+    - [ ] 可并行：审阅 `internal/cli/cli_test.go` 是否覆盖 source mode、multipart、JSON 回退、localhost 场景。
+  - 测试方案：`go test ./internal/cli`。
+  - 验收标准：CLI 上传和 JSON 两类请求测试通过；service import stream progress/complete 输出不回归。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：4.1 integration 测试。
+
+## 4. 集成、E2E 和文档收尾
+
+参考文档：[实施计划阶段 4](docs/plan/remote-service-import-implementation-plan.md#阶段-4集成e2e-和文档收尾)。
+
+- [ ] 4.1 增加 integration 覆盖
+  - 依赖：3.4。
+  - 工作内容：在 `internal/integration` 增加真实 `admin.Server` + `cli.CLI` 流程，验证默认 `auto` 上传本地目录、`--source-mode remote` 保持 JSON、recursive 上传、archive 上传和 archive `--build=always` 失败规则。
+  - 可并行子任务：
+    - [ ] 可并行：实现单 service 上传目录 integration。
+    - [ ] 可并行：实现 recursive 上传目录 integration。
+    - [ ] 可并行：实现 archive 上传与 `--build=always` 规则 integration。
+    - [ ] 可并行：实现 `--source-mode remote` 兼容 integration。
+  - 测试方案：`go test ./internal/integration`。
+  - 验收标准：daemon/importer 使用独立 data dir 时不需要访问客户端 source 路径；`PackageSource` 为 `client-upload:<basename>` 形式；兼容路径可验证。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：4.2 e2e 覆盖。
+
+- [ ] 4.2 增加真实 binary E2E 覆盖
+  - 依赖：4.1。
+  - 工作内容：在 `tests/e2e` 增加真实 daemon + CLI 场景，使用 loopback daemon 地址但不同工作目录，验证默认 `auto` 上传本地 fixture 并导入成功。
+  - 可并行子任务：
+    - [ ] 可并行：复用 `tests/e2e/harness_test.go` fixture 和 CLI helper 设计测试。
+    - [ ] 可并行：补充持久化断言，确认 service row `package_source` 不含客户端绝对路径。
+    - [ ] 可并行：运行 e2e focused case 或完整 `go test ./tests/e2e -count=1`。
+  - 测试方案：`go test ./tests/e2e -count=1`。
+  - 验收标准：真实 binary/daemon/CLI 流程通过；测试不依赖固定端口、用户 home、外部网络或 npm registry。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：4.3 文档更新。
+
+- [ ] 4.3 更新用户文档和设计文档
+  - 依赖：4.1。
+  - 工作内容：更新 `README.md`、`docs/design/product/cli.md`、`docs/design/technical/service-package.md`，说明默认 `auto` 上传客户端本地 source、`--source-mode remote`、`--source-mode upload`、localhost/Docker/port-forward 文件系统边界。
+  - 可并行子任务：
+    - [ ] 可并行：更新 README 用户工作流和 additional notes。
+    - [ ] 可并行：更新 CLI 产品设计中命令形态和 source mode。
+    - [ ] 可并行：更新 service package 技术设计中 source 获取和 artifact 规则。
+  - 测试方案：文档审阅；如文档引用命令示例，配合 4.1/4.2 测试结果校验示例可行。
+  - 验收标准：文档描述与实现一致；没有把 `127.0.0.1` 描述为共享文件系统依据；未引入未实现能力。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：4.4 全量质量门禁。
+
+- [ ] 4.4 全量质量门禁和收口审计
+  - 依赖：4.2、4.3。
+  - 工作内容：运行 focused tests 和 harness gates，审计 spec/plan/progress 与实现一致性，记录无法运行的门禁和残余风险。
+  - 可并行子任务：
+    - [ ] 可并行：运行 `go test ./internal/cli ./internal/admin ./internal/packageimport ./internal/integration`。
+    - [ ] 可并行：运行 `go test ./tests/e2e -count=1`。
+    - [ ] 可并行：运行 `task lint`。
+    - [ ] 可并行：运行 `task test`。
+    - [ ] 可并行：运行 `task build`。
+  - 测试方案：上述 focused tests 和 harness gates；若环境缺少 Node.js/npm/protoc，记录失败原因和已运行替代测试。
+  - 验收标准：全部可运行门禁通过；无法运行项有明确环境原因；spec、plan、progress、README 和设计文档一致。
+  - 完成总结：
+    - 状态：待完成。
+    - 变更：待完成。
+    - 验证：待完成。
+    - 审计与例外：待完成。
+    - 下一目标：无。
+
+## 首版不做事项
+
+- 不实现通用文件上传管理 API。
+- 不支持从 stdin 上传 service package。
+- 不新增服务端上传大小限制、配额、断点续传或上传进度事件。
+- 不改变 service package contract、runtime sandbox、安全信任模型或 SQLite schema。
+- 不引入 SSH/SCP/rsync 或 daemon 反向访问 CLI 机器。
+- 不改变 config/secret/token 文件输入语义。
+- 不迁移现有 JSON Admin API 客户端到 multipart。
+
+## 完成总结要求
+
+每个任务完成后将占位内容替换为以下结构：
+
+- 状态：一句话说明完成状态。
+- 变更：列出文件、模块、行为变化和关键决策。
+- 验证：列出实际运行的命令、结果和关键产物。
+- 审计与例外：列出已审阅但未修改的命中、保留兼容面、无法运行的门禁、残余风险和原因；没有则写“无”。
+- 下一目标：写下一个父任务或明确“无”。

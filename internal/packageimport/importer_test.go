@@ -47,6 +47,45 @@ func TestImporterImportsDirectoryPackage(t *testing.T) {
 	}
 }
 
+func TestOptionsUploadIsInternalOnly(t *testing.T) {
+	opts := Options{
+		ServiceID: "echo",
+		Name:      "Echo",
+		Source:    "client-upload:fixture",
+		Offline:   true,
+		Reinstall: true,
+		Build:     "never",
+		Recursive: true,
+		Upload: &UploadedSource{
+			Kind:          UploadKindDirectory,
+			Path:          "/tmp/octobus-upload/package.tgz",
+			DisplaySource: "client-upload:fixture",
+		},
+		Progress: func(ImportProgressEvent) error { return nil },
+	}
+	raw, err := json.Marshal(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, hidden := range []string{`"upload"`, `"Upload"`, "octobus-upload", "package.tgz", "progress"} {
+		if strings.Contains(text, hidden) {
+			t.Fatalf("Options JSON leaked internal field %q in %s", hidden, text)
+		}
+	}
+
+	var decoded Options
+	if err := json.Unmarshal([]byte(`{"service_id":"echo","source":"fixture","upload":{"kind":"directory","path":"/tmp/leak","display_source":"leak"}}`), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.ServiceID != "echo" || decoded.Source != "fixture" {
+		t.Fatalf("decoded public fields regressed: %+v", decoded)
+	}
+	if decoded.Upload != nil {
+		t.Fatalf("decoded internal upload from JSON: %+v", decoded.Upload)
+	}
+}
+
 func TestImporterReportsSingleServiceProgress(t *testing.T) {
 	dataDir, s := openTestStore(t)
 	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)

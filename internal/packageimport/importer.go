@@ -37,7 +37,22 @@ type Options struct {
 	Reinstall bool                            `json:"reinstall"`
 	Build     string                          `json:"build"`
 	Recursive bool                            `json:"recursive"`
+	Upload    *UploadedSource                 `json:"-"`
 	Progress  func(ImportProgressEvent) error `json:"-"`
+}
+
+type UploadKind string
+
+const (
+	UploadKindDirectory UploadKind = "directory"
+	UploadKindArchive   UploadKind = "archive"
+	UploadKindNPMLocal  UploadKind = "npm-local"
+)
+
+type UploadedSource struct {
+	Kind          UploadKind
+	Path          string
+	DisplaySource string
 }
 
 type Result struct {

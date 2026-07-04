@@ -259,20 +259,26 @@
       - localhost/Docker 映射语义和 Git/npm registry/HTTP JSON 回归测试按计划留给 3.3。
     - 下一目标：3.3 CLI 兼容性和回归。
 
-- [ ] 3.3 调整 CLI JSON 路径兼容测试
+- [x] 3.3 调整 CLI JSON 路径兼容测试
   - 依赖：3.2。
   - 工作内容：保留现有 JSON request 路径用于 `--source-mode remote` 和本地不存在 source；调整 `TestServiceImportRequestConvertsLocalSourceToAbsolutePath` 等旧断言，使默认 `auto` 的新行为断言 multipart。
   - 可并行子任务：
-    - [ ] 可并行：更新 local path absolute normalize 相关测试。
-    - [ ] 可并行：补充 localhost/Docker 映射语义测试，`--addr 127.0.0.1` 且本地 source 存在时仍上传。
-    - [ ] 可并行：补充 Git/npm registry/HTTP source 保持 JSON 的回归测试。
+    - [x] 可并行：更新 local path absolute normalize 相关测试。
+    - [x] 可并行：补充 localhost/Docker 映射语义测试，`--addr 127.0.0.1` 且本地 source 存在时仍上传。
+    - [x] 可并行：补充 Git/npm registry/HTTP source 保持 JSON 的回归测试。
   - 测试方案：`go test ./internal/cli`。
   - 验收标准：默认 `auto` 行为与 spec 一致；现有 remote/Git/npm/HTTP source 不回归；CLI 输出和错误语义清晰。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 将本地 archive、本地 `npm:` 和 recursive 本地 `npm:` 的旧 JSON 绝对路径测试显式改为 `--source-mode remote`，保留 daemon-side 兼容语义。
+      - 将默认 auto 本地目录 multipart 测试明确为 loopback admin address 场景，证明 `127.0.0.1` 下本地 source 存在仍上传，不依赖地址判断。
+      - 新增 HTTP archive source 默认 auto 保持 JSON 的回归测试；既有 Git source 和 npm registry source 测试继续覆盖 daemon-side JSON 路径。
+    - 验证：
+      - `go test ./internal/cli` 通过。
+    - 审计与例外：
+      - CLI 输出和 stream handler 仍走现有 `handleServiceImportStream`；本阶段未发现 stream progress/complete 输出回归。
+      - 更完整的 CLI 阶段测试覆盖审阅留给 3.4 收口。
     - 下一目标：3.4 CLI 阶段收口。
 
 - [ ] 3.4 CLI 阶段收口

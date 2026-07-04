@@ -465,7 +465,7 @@ func TestResolveImportSourceTransferModes(t *testing.T) {
 	}
 }
 
-func TestServiceImportMultipartUploadsLocalDirectory(t *testing.T) {
+func TestServiceImportAutoUploadsLocalDirectoryWithLoopbackAdminAddr(t *testing.T) {
 	tmp := t.TempDir()
 	pkg := filepath.Join(tmp, "pkg")
 	if err := os.MkdirAll(filepath.Join(pkg, "sub"), 0o755); err != nil {
@@ -518,8 +518,33 @@ func TestServiceImportMultipartUploadsLocalDirectory(t *testing.T) {
 		_, _ = fmt.Fprintln(w, `{"type":"complete","status":"ok","service":{"ID":"echo"},"restarted_instances":[],"restart_errors":[]}`)
 	}))
 	defer server.Close()
+	if !strings.Contains(server.URL, "127.0.0.1") {
+		t.Fatalf("test server is not using a loopback address: %s", server.URL)
+	}
 	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard}
 	if err := c.Run([]string{"service", "import", "echo", "./pkg"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestServiceImportAutoKeepsHTTPArchiveJSON(t *testing.T) {
+	source := "https://example.com/packages/echo.tgz"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			t.Fatalf("Content-Type=%q", r.Header.Get("Content-Type"))
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req["service_id"] != "echo" || req["source"] != source {
+			t.Fatalf("unexpected HTTP archive JSON body: %+v", req)
+		}
+		_, _ = fmt.Fprintln(w, `{"type":"complete","status":"ok","service":{"ID":"echo"},"restarted_instances":[],"restart_errors":[]}`)
+	}))
+	defer server.Close()
+	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard}
+	if err := c.Run([]string{"service", "import", "echo", source}); err != nil {
 		t.Fatal(err)
 	}
 }

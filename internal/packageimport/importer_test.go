@@ -1155,6 +1155,27 @@ func TestPrepareUploadedSourceArchives(t *testing.T) {
 	}
 }
 
+func TestImporterRejectsBuildAlwaysForUploadedArchive(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+	zipPath := filepath.Join(t.TempDir(), "client-package.zip")
+	writeZipPackage(t, zipPath, pkg)
+
+	_, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+		ServiceID: "echo",
+		Source:    "client-upload:client-package.zip",
+		Upload:    &UploadedSource{Kind: UploadKindArchive, Path: zipPath},
+		Build:     "always",
+		Offline:   true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "--build=always is only supported") {
+		t.Fatalf("expected uploaded archive build=always error, got %v", err)
+	}
+	if _, err := s.GetService(context.Background(), "echo"); err == nil {
+		t.Fatal("service was committed after uploaded archive build=always failure")
+	}
+}
+
 func TestPrepareUploadedSourceNPMLocal(t *testing.T) {
 	dataDir, s := openTestStore(t)
 	imp := &Importer{DataDir: dataDir, Store: s}

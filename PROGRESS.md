@@ -95,19 +95,24 @@
       - 本阶段只覆盖 `internal/packageimport` 的持久化语义；Admin 响应和 CLI 输出泄露审计将在阶段 2/3 接入 multipart 后继续覆盖。
     - 下一目标：1.4 packageimport 阶段收口。
 
-- [ ] 1.4 Package Import 阶段收口
+- [x] 1.4 Package Import 阶段收口
   - 依赖：1.1、1.2、1.3。
   - 工作内容：运行本阶段 focused tests，修复 packageimport 内部 regressions，确认 `--build=always` 对上传 archive 保持现有 archive 错误语义。
   - 可并行子任务：
-    - [ ] 可并行：审阅 `internal/packageimport/importer_test.go` 是否覆盖 upload directory、archive、npm-local、recursive、source root。
-    - [ ] 可并行：运行并记录 focused test 结果。
+    - [x] 可并行：审阅 `internal/packageimport/importer_test.go` 是否覆盖 upload directory、archive、npm-local、recursive、source root。
+    - [x] 可并行：运行并记录 focused test 结果。
   - 测试方案：`go test ./internal/packageimport`。
   - 验收标准：本阶段所有 packageimport 上传源测试通过；未设置 `Options.Upload` 的现有 source 行为不变。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 审阅 `internal/packageimport/importer_test.go` 中上传目录、上传 archive、`npm-local`、single service source root、recursive scan root 和错误路径覆盖。
+      - 新增 `TestImporterRejectsBuildAlwaysForUploadedArchive`，用真实 `Import` 路径确认上传 archive 在 `--build=always` 下保持现有非 buildable archive 错误语义，且失败后不提交 service。
+    - 验证：
+      - `go test ./internal/packageimport` 通过。
+    - 审计与例外：
+      - 阶段 1 的 `Options.Upload`、`prepareUploadedSource`、`PackageSource` 持久化和 archive build policy 均已有 focused coverage。
+      - 未设置 `Options.Upload` 的现有 local/npm/remote archive/Git 路径继续由原有 packageimport 测试覆盖，本阶段 focused gate 已整体通过。
     - 下一目标：2.1 Admin multipart 解析。
 
 ## 2. Admin API 接受 Multipart Import

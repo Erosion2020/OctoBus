@@ -160,6 +160,10 @@ task example:clean-checkout-smoke
 
 第一个位置参数 `calculator` 是 OctoBus 本地 service id，必填；`--name` 可选，用于覆盖展示名。未提供 `--name` 时，首次导入使用 `service.json` 中的 `displayName`，没有 `displayName` 则使用 `name`。再次导入同一个 service id 且未提供 `--name` 时，会保留已有展示名。
 
+`service import` 默认使用 `--source-mode auto`：如果 `SOURCE` 是 CLI 客户端存在的本地目录、本地 `.tgz` / `.tar.gz` / `.zip` 归档包，或 `npm:` 后跟客户端本地路径，CLI 会把该 source 上传给 daemon。否则 CLI 保持既有 daemon-side JSON import 行为，由 daemon 自行解析 npm registry package、HTTPS Git source、远程 HTTP(S) 归档包，或只存在于 daemon 主机上的路径。该判断不依赖 `--addr` 是否为 `127.0.0.1`、`localhost` 或远程地址；Docker 端口映射、SSH tunnel 和 port-forward 都可能使用 loopback 地址，但并不表示 CLI 与 daemon 共享文件系统。
+
+如果希望 `SOURCE` 始终由 daemon 文件系统解析，即使 CLI 机器上也存在同名路径，使用 `--source-mode remote`。如果希望强制客户端上传，并在 source 不是受支持的本地来源时在发起 admin 请求前失败，使用 `--source-mode upload`。
+
 创建并启动一个 instance：
 
 ```bash
@@ -197,7 +201,7 @@ curl -X POST \
 
 补充提示：
 
-- `service import` 除了本地目录，也支持本地和远程 HTTP(S) `.tgz` / `.tar.gz` / `.zip` 归档包、`npm:` source 和 HTTPS Git source；除远程 HTTP(S) 归档 URL 外，package source 都可追加 `//service-dir` 来选择 distribution package 内的 service root，例如 `npm:@scope/tentacle@1.0.0//Hanqing_Ticket` 或 `https://github.com/acme/tentacle.git//Hanqing_Ticket@v1.0.0`。远程归档 URL 使用包根目录作为 service root；multi-service 归档可用 recursive import。离线导入、强制重装依赖等参数可查看 `./bin/octobus service import --help`
+- `service import` 除了客户端本地目录，也支持客户端本地和远程 HTTP(S) `.tgz` / `.tar.gz` / `.zip` 归档包、`npm:` source 和 HTTPS Git source；除远程 HTTP(S) 归档 URL 外，package source 都可追加 `//service-dir` 来选择 distribution package 内的 service root，例如 `npm:@scope/tentacle@1.0.0//Hanqing_Ticket` 或 `https://github.com/acme/tentacle.git//Hanqing_Ticket@v1.0.0`。远程归档 URL 使用包根目录作为 service root；multi-service 归档可用 recursive import。source 传输模式、离线导入、强制重装依赖等参数可查看 `./bin/octobus service import --help`
 - 使用 `service import --recursive SOURCE` 可以一次导入 multi-service distribution package 中发现到的所有 service root，例如 `./bin/octobus service import --recursive npm:@chaitin-ai/octobus-tentacles`。recursive 模式下，`SOURCE//some-dir` 表示递归发现的 scan root；每个导入的 service id 来自对应 `service.json.name`
 - `instance` 支持 `list/get/update/delete/update-config/update-secret/start/stop/restart`；`create` 对 `long-running` service 默认会立即启动实例，配置可以来自 `--config`、`--config-json` 或 stdin，敏感信息可以来自 `--secret`、`--secret-json` 或 stdin
 - `on-demand` instance 会保持 enabled/running 的逻辑状态，但 `start/stop/restart` 和带 `--restart` 的配置更新会返回运行模式不支持持久运行时控制的错误

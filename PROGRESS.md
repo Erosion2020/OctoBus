@@ -235,21 +235,28 @@
       - 默认 `auto` 已能判定本地 source 应上传，但实际上传行为需 3.2 接通请求体后完整可用。
     - 下一目标：3.2 CLI multipart 请求。
 
-- [ ] 3.2 实现 CLI multipart 请求和目录打包
+- [x] 3.2 实现 CLI multipart 请求和目录打包
   - 依赖：3.1。
   - 工作内容：实现 service import multipart request helper；上传目录时流式生成 `package/` 根 tar.gz，上传 archive 时流式读取文件；设置 `options`、`upload_kind`、`package` part 和 `Accept: application/x-ndjson`。
   - 可并行子任务：
-    - [ ] 可并行：实现 multipart request builder 和 admin token header 复用。
-    - [ ] 可并行：实现目录 tar.gz 流式打包，跳过 symlink 和非 regular file。
-    - [ ] 可并行：实现 archive 文件流式上传。
-    - [ ] 可并行：补充 multipart 请求体解析测试，断言 `options.source` 不含客户端绝对路径。
+    - [x] 可并行：实现 multipart request builder 和 admin token header 复用。
+    - [x] 可并行：实现目录 tar.gz 流式打包，跳过 symlink 和非 regular file。
+    - [x] 可并行：实现 archive 文件流式上传。
+    - [x] 可并行：补充 multipart 请求体解析测试，断言 `options.source` 不含客户端绝对路径。
   - 测试方案：`go test ./internal/cli`。
   - 验收标准：CLI multipart 请求可被测试 server 解析；`options.source` 为 `client-upload:<basename>` 或带 service root；上传请求仍复用 progress stream handler。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/cli/cli.go` 实现 `requestServiceImportUpload`，用 `io.Pipe` 和 `multipart.Writer` 发送 `options`、`upload_kind` 和 `package` part。
+      - 抽出 `doRequestWithClientReaderAndHeaders`，让 JSON 和 multipart 请求复用 admin base URL、Authorization、HTTP client timeout 和错误处理。
+      - 新增 `writeImportDirectoryTarGz`，目录上传以 `package/` 为 tar.gz 根，跳过 symlink 和非 regular file；archive 上传直接流式复制本地文件。
+      - 在 `internal/cli/cli_test.go` 增加 multipart 请求解析测试，覆盖默认 `auto` 上传目录、`--source-mode upload` 上传 archive 和 `npm:` 本地目录上传。
+    - 验证：
+      - `go test ./internal/cli` 通过。
+    - 审计与例外：
+      - 测试断言 multipart `options.source` 为 `client-upload:<basename>`，不包含客户端绝对路径。
+      - localhost/Docker 映射语义和 Git/npm registry/HTTP JSON 回归测试按计划留给 3.3。
     - 下一目标：3.3 CLI 兼容性和回归。
 
 - [ ] 3.3 调整 CLI JSON 路径兼容测试

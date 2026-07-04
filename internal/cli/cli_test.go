@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -461,6 +463,191 @@ func TestResolveImportSourceTransferModes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServiceImportMultipartUploadsLocalDirectory(t *testing.T) {
+	tmp := t.TempDir()
+	pkg := filepath.Join(tmp, "pkg")
+	if err := os.MkdirAll(filepath.Join(pkg, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "service.json"), []byte(`{"name":"echo"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "sub", "entry.js"), []byte("console.log('ok')"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("service.json", filepath.Join(pkg, "link.json")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "application/x-ndjson" || !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			t.Fatalf("unexpected headers: Accept=%q Content-Type=%q", r.Header.Get("Accept"), r.Header.Get("Content-Type"))
+		}
+		options, uploadKind, pkgBytes := readServiceImportMultipartRequest(t, r)
+		if options["service_id"] != "echo" || options["source"] != "client-upload:pkg" {
+			t.Fatalf("unexpected multipart options: %+v", options)
+		}
+		if strings.Contains(fmt.Sprint(options["source"]), tmp) {
+			t.Fatalf("multipart options leaked local path: %+v", options)
+		}
+		if uploadKind != string(packageimport.UploadKindDirectory) {
+			t.Fatalf("upload_kind=%q", uploadKind)
+		}
+		entries := readTarGzEntryNames(t, pkgBytes)
+		for _, want := range []string{"package/service.json", "package/sub/entry.js"} {
+			if !entries[want] {
+				t.Fatalf("directory upload missing %s in entries %+v", want, entries)
+			}
+		}
+		if entries["package/link.json"] {
+			t.Fatalf("directory upload should skip symlink entries: %+v", entries)
+		}
+		_, _ = fmt.Fprintln(w, `{"type":"complete","status":"ok","service":{"ID":"echo"},"restarted_instances":[],"restart_errors":[]}`)
+	}))
+	defer server.Close()
+	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard}
+	if err := c.Run([]string{"service", "import", "echo", "./pkg"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestServiceImportMultipartUploadsArchiveAndNPMLocal(t *testing.T) {
+	tmp := t.TempDir()
+	archive := filepath.Join(tmp, "service.zip")
+	if err := os.WriteFile(archive, []byte("zip bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pkg := filepath.Join(tmp, "pkg")
+	if err := os.Mkdir(pkg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "package.json"), []byte(`{"name":"fixture"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		options, uploadKind, pkgBytes := readServiceImportMultipartRequest(t, r)
+		seen = append(seen, uploadKind)
+		switch uploadKind {
+		case string(packageimport.UploadKindArchive):
+			if options["source"] != "client-upload:service.zip" || string(pkgBytes) != "zip bytes" {
+				t.Fatalf("archive multipart mismatch options=%+v body=%q", options, pkgBytes)
+			}
+		case string(packageimport.UploadKindNPMLocal):
+			if options["source"] != "client-upload:pkg" {
+				t.Fatalf("npm-local multipart options mismatch: %+v", options)
+			}
+			entries := readTarGzEntryNames(t, pkgBytes)
+			if !entries["package/package.json"] {
+				t.Fatalf("npm-local directory upload missing package file in entries %+v", entries)
+			}
+		default:
+			t.Fatalf("unexpected upload_kind=%q", uploadKind)
+		}
+		_, _ = fmt.Fprintln(w, `{"type":"complete","status":"ok","service":{"ID":"echo"},"restarted_instances":[],"restart_errors":[]}`)
+	}))
+	defer server.Close()
+	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard}
+	if err := c.Run([]string{"service", "import", "--source-mode", "upload", "echo", "service.zip"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Run([]string{"service", "import", "echo", "npm:./pkg"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(seen, ",") != "archive,npm-local" {
+		t.Fatalf("upload kinds=%v", seen)
+	}
+}
+
+func readServiceImportMultipartRequest(t *testing.T, r *http.Request) (map[string]any, string, []byte) {
+	t.Helper()
+	reader, err := r.MultipartReader()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var options map[string]any
+	var uploadKind string
+	var packageBytes []byte
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch part.FormName() {
+		case "options":
+			if err := json.NewDecoder(part).Decode(&options); err != nil {
+				t.Fatal(err)
+			}
+		case "upload_kind":
+			raw, err := io.ReadAll(part)
+			if err != nil {
+				t.Fatal(err)
+			}
+			uploadKind = string(raw)
+		case "package":
+			raw, err := io.ReadAll(part)
+			if err != nil {
+				t.Fatal(err)
+			}
+			packageBytes = raw
+		default:
+			t.Fatalf("unexpected multipart field %q", part.FormName())
+		}
+	}
+	if options == nil || uploadKind == "" || packageBytes == nil {
+		t.Fatalf("incomplete multipart request options=%+v uploadKind=%q packageBytes=%d", options, uploadKind, len(packageBytes))
+	}
+	return options, uploadKind, packageBytes
+}
+
+func readTarGzEntryNames(t *testing.T, raw []byte) map[string]bool {
+	t.Helper()
+	gz, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gz.Close()
+	reader := tar.NewReader(gz)
+	entries := map[string]bool{}
+	for {
+		header, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries[header.Name] = true
+	}
+	return entries
 }
 
 func TestServiceImportRequestConvertsLocalSourceToAbsolutePath(t *testing.T) {

@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -1216,7 +1219,122 @@ func (c *CLI) requestServiceImport(body any) error {
 }
 
 func (c *CLI) requestServiceImportUpload(body any, source localImportSource) error {
-	return errors.New("service import upload request is not implemented")
+	client := *c.Client
+	client.Timeout = 0
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+	go func() {
+		err := writeServiceImportMultipart(writer, body, source)
+		closeWriterErr := writer.Close()
+		if err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+		if closeWriterErr != nil {
+			_ = pw.CloseWithError(closeWriterErr)
+			return
+		}
+		_ = pw.Close()
+	}()
+	return c.doRequestWithClientReaderAndHeaders(&client, http.MethodPost, "/admin/v1/services/import", pr, map[string]string{
+		"Accept":       "application/x-ndjson",
+		"Content-Type": writer.FormDataContentType(),
+	}, c.handleServiceImportStream)
+}
+
+func writeServiceImportMultipart(writer *multipart.Writer, body any, source localImportSource) error {
+	options, err := writer.CreateFormField("options")
+	if err != nil {
+		return err
+	}
+	if err := json.NewEncoder(options).Encode(body); err != nil {
+		return err
+	}
+	kind, err := writer.CreateFormField("upload_kind")
+	if err != nil {
+		return err
+	}
+	if _, err := io.WriteString(kind, string(source.UploadKind)); err != nil {
+		return err
+	}
+	part, err := writer.CreateFormFile("package", filepath.Base(source.Path))
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(source.Path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return writeImportDirectoryTarGz(source.Path, part)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("import source %q is not a regular file", source.Path)
+	}
+	file, err := os.Open(source.Path)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(part, file)
+	closeErr := file.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
+}
+
+func writeImportDirectoryTarGz(src string, dst io.Writer) error {
+	gz := gzip.NewWriter(dst)
+	tw := tar.NewWriter(gz)
+	walkErr := filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == src {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && info.Mode().Type() != 0 {
+			return nil
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		hdr, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		hdr.Name = filepath.ToSlash(filepath.Join("package", rel))
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(tw, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
+	})
+	closeTarErr := tw.Close()
+	closeGzipErr := gz.Close()
+	if walkErr != nil {
+		return walkErr
+	}
+	if closeTarErr != nil {
+		return closeTarErr
+	}
+	return closeGzipErr
 }
 
 func (c *CLI) requestStream(method, path string, body any) error {
@@ -1260,6 +1378,14 @@ func (c *CLI) doRequestWithClientAndHeaders(client *http.Client, method, path st
 		}
 		reader = bytes.NewReader(b)
 	}
+	requestHeaders := map[string]string{"Content-Type": "application/json"}
+	for key, value := range headers {
+		requestHeaders[key] = value
+	}
+	return c.doRequestWithClientReaderAndHeaders(client, method, path, reader, requestHeaders, handle)
+}
+
+func (c *CLI) doRequestWithClientReaderAndHeaders(client *http.Client, method, path string, reader io.Reader, headers map[string]string, handle func(*http.Response) error) error {
 	baseURL, err := adminBaseURL(c.AdminAddr)
 	if err != nil {
 		return err
@@ -1268,7 +1394,6 @@ func (c *CLI) doRequestWithClientAndHeaders(client *http.Client, method, path st
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}

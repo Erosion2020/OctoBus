@@ -306,21 +306,28 @@
 
 参考文档：[实施计划阶段 4](docs/plan/remote-service-import-implementation-plan.md#阶段-4集成e2e-和文档收尾)。
 
-- [ ] 4.1 增加 integration 覆盖
+- [x] 4.1 增加 integration 覆盖
   - 依赖：3.4。
   - 工作内容：在 `internal/integration` 增加真实 `admin.Server` + `cli.CLI` 流程，验证默认 `auto` 上传本地目录、`--source-mode remote` 保持 JSON、recursive 上传、archive 上传和 archive `--build=always` 失败规则。
   - 可并行子任务：
-    - [ ] 可并行：实现单 service 上传目录 integration。
-    - [ ] 可并行：实现 recursive 上传目录 integration。
-    - [ ] 可并行：实现 archive 上传与 `--build=always` 规则 integration。
-    - [ ] 可并行：实现 `--source-mode remote` 兼容 integration。
+    - [x] 可并行：实现单 service 上传目录 integration。
+    - [x] 可并行：实现 recursive 上传目录 integration。
+    - [x] 可并行：实现 archive 上传与 `--build=always` 规则 integration。
+    - [x] 可并行：实现 `--source-mode remote` 兼容 integration。
   - 测试方案：`go test ./internal/integration`。
   - 验收标准：daemon/importer 使用独立 data dir 时不需要访问客户端 source 路径；`PackageSource` 为 `client-upload:<basename>` 形式；兼容路径可验证。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/integration/goal_flow_test.go` 增强 `TestCLIAdminGatewayAndStoreIntegrationCRUD`，默认 `auto` 通过 CLI 上传客户端本地目录，并断言 store 中 `PackageSource=client-upload:fixture`。
+      - 增强 `TestCLIRecursiveServiceImportListsServices`，断言 recursive 上传目录后的每个服务持久化为 `client-upload:recursive-fixture//<service-root>`。
+      - 新增 `TestCLIServiceImportUploadArchiveAndRemoteModeIntegration`，覆盖 CLI 上传 zip archive、上传 archive 下 `--build=always` 失败不提交 service，以及 `--source-mode remote` 保留 daemon-side 本地路径语义。
+    - 验证：
+      - `go test ./internal/integration -run 'TestCLI(AdminGatewayAndStoreIntegrationCRUD|RecursiveServiceImportListsServices|ServiceImportUploadArchiveAndRemoteModeIntegration)$' -count=1` 通过。
+      - `go test ./internal/integration` 通过。
+    - 审计与例外：
+      - integration 使用真实 `admin.Server`、`packageimport.Importer`、SQLite store、`httptest` Admin server 和 `cli.CLI`，未依赖固定端口、用户 home 或外部网络。
+      - E2E 真实 binary/daemon/CLI 覆盖仍未执行，按计划留给 4.2。
     - 下一目标：4.2 e2e 覆盖。
 
 - [ ] 4.2 增加真实 binary E2E 覆盖

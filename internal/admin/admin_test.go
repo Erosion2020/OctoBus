@@ -610,6 +610,58 @@ func TestAdminServiceImportMultipartRecursiveAggregateAndValidation(t *testing.T
 	})
 }
 
+func TestAdminServiceImportMultipartRequiresAdminToken(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.AddAdminToken(ctx, domain.AdminToken{ID: "admin-key", Name: "Admin"}, "admin-secret"); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	srv := &Server{
+		Store: st,
+		Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+			called = true
+			if opts.Upload == nil || opts.Upload.Kind != packageimport.UploadKindDirectory {
+				t.Fatalf("authorized multipart import missing upload: %+v", opts)
+			}
+			return packageimport.Result{Service: domain.Service{ID: opts.ServiceID, Name: "Echo", RuntimeMode: domain.RuntimeModeOnDemand}}, nil
+		}},
+	}
+	unauthorized := newMultipartServiceImportRequest(t,
+		multipartTestPart{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture","offline":true}`},
+		multipartTestPart{name: "upload_kind", value: "directory"},
+		multipartTestPart{name: "package", filename: "package.tgz", value: "package bytes"},
+	)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, unauthorized)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status=%d body=%s", w.Code, w.Body.String())
+	}
+	if called {
+		t.Fatal("multipart importer was called without admin token")
+	}
+
+	authorized := newMultipartServiceImportRequest(t,
+		multipartTestPart{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture","offline":true}`},
+		multipartTestPart{name: "upload_kind", value: "directory"},
+		multipartTestPart{name: "package", filename: "package.tgz", value: "package bytes"},
+	)
+	authorized.Header.Set("Authorization", "Bearer admin-secret")
+	w = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, authorized)
+	if w.Code != http.StatusOK {
+		t.Fatalf("authorized status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !called {
+		t.Fatal("authorized multipart import did not call importer")
+	}
+}
+
 type multipartTestPart struct {
 	name     string
 	filename string

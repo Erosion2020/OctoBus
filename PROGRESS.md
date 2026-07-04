@@ -187,19 +187,24 @@
       - Admin token middleware 对 multipart 请求的覆盖留给 2.4 阶段收口。
     - 下一目标：2.4 Admin 阶段收口。
 
-- [ ] 2.4 Admin 阶段收口
+- [x] 2.4 Admin 阶段收口
   - 依赖：2.1、2.2、2.3。
   - 工作内容：运行 admin focused tests，修复兼容性和 cleanup 问题；确认 admin token middleware 对 multipart 请求仍生效。
   - 可并行子任务：
-    - [ ] 可并行：运行并记录 `go test ./internal/admin`。
-    - [ ] 可并行：审阅 `internal/admin/admin_test.go` 新增覆盖是否包含错误路径和 cleanup。
+    - [x] 可并行：运行并记录 `go test ./internal/admin`。
+    - [x] 可并行：审阅 `internal/admin/admin_test.go` 新增覆盖是否包含错误路径和 cleanup。
   - 测试方案：`go test ./internal/admin`。
   - 验收标准：Admin multipart 能力可用且 JSON import 兼容；无临时文件残留测试失败。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/admin/admin_test.go` 增加 multipart admin token middleware 测试，使用真实 `srv.Handler()` 验证无 token 返回 `401` 且 importer 不执行，有效 token 才到达 fake importer。
+      - 审阅 Admin multipart 测试覆盖：JSON 兼容、未知 Content-Type、happy path、缺少 part、非法 kind、非法 options JSON、成功/失败 cleanup、NDJSON complete/error、recursive aggregate/validation、临时路径 redaction 和 token middleware。
+    - 验证：
+      - `go test ./internal/admin` 通过。
+    - 审计与例外：
+      - Admin 阶段 multipart 能力已可把上传临时文件传入 `Options.Upload`，并在请求结束后清理。
+      - 本阶段未接入 CLI multipart builder；客户端实际上传入口从 3.1/3.2 开始实现。
     - 下一目标：3.1 CLI source-mode。
 
 ## 3. CLI Source Mode 和 Multipart 上传

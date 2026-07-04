@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"octobus/internal/domain"
+	"octobus/internal/packageimport"
 	"octobus/internal/version"
 
 	"github.com/spf13/cobra"
@@ -217,7 +218,7 @@ func (c *CLI) serviceCommand() *cobra.Command {
 }
 
 func (c *CLI) serviceImportCommand() *cobra.Command {
-	var name, build string
+	var name, build, sourceModeValue string
 	var offline, reinstall, recursive bool
 	cmd := &cobra.Command{
 		Use:   "import SERVICE SOURCE [--name NAME] [--build auto|always|never] [--offline] [--reinstall]\n  octobus service import --recursive SOURCE [--build auto|always|never] [--offline] [--reinstall]",
@@ -253,18 +254,28 @@ func (c *CLI) serviceImportCommand() *cobra.Command {
 			} else {
 				sourceArg = args[1]
 			}
-			source, err := normalizeImportSource(sourceArg)
+			transfer, err := resolveImportSourceTransfer(sourceArg, sourceModeValue)
 			if err != nil {
 				return err
 			}
+			source := transfer.Source
 			if recursive {
-				return c.requestServiceImport(map[string]any{"recursive": true, "source": source, "offline": offline, "reinstall": reinstall, "build": build})
+				body := map[string]any{"recursive": true, "source": source, "offline": offline, "reinstall": reinstall, "build": build}
+				if transfer.Upload {
+					return c.requestServiceImportUpload(body, transfer.Local)
+				}
+				return c.requestServiceImport(body)
 			}
-			return c.requestServiceImport(map[string]any{"service_id": args[0], "name": name, "source": source, "offline": offline, "reinstall": reinstall, "build": build})
+			body := map[string]any{"service_id": args[0], "name": name, "source": source, "offline": offline, "reinstall": reinstall, "build": build}
+			if transfer.Upload {
+				return c.requestServiceImportUpload(body, transfer.Local)
+			}
+			return c.requestServiceImport(body)
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "service display name override")
 	cmd.Flags().StringVar(&build, "build", "auto", "source package build policy: auto, always, or never")
+	cmd.Flags().StringVar(&sourceModeValue, "source-mode", "auto", "source transfer mode: auto, upload, or remote")
 	cmd.Flags().BoolVar(&offline, "offline", false, "use npm offline cache")
 	cmd.Flags().BoolVar(&reinstall, "reinstall", false, "reinstall dependencies")
 	cmd.Flags().BoolVar(&recursive, "recursive", false, "import all services discovered under the package source")
@@ -341,6 +352,113 @@ func normalizeLocalImportSource(source string) (string, error) {
 		return "", fmt.Errorf("resolve import source %q: %w", source, err)
 	}
 	return abs, nil
+}
+
+type sourceTransferMode string
+
+const (
+	sourceTransferAuto   sourceTransferMode = "auto"
+	sourceTransferUpload sourceTransferMode = "upload"
+	sourceTransferRemote sourceTransferMode = "remote"
+)
+
+type importSourceTransfer struct {
+	Source string
+	Upload bool
+	Local  localImportSource
+}
+
+type localImportSource struct {
+	Path       string
+	Source     string
+	UploadKind packageimport.UploadKind
+}
+
+func resolveImportSourceTransfer(source, modeValue string) (importSourceTransfer, error) {
+	mode, err := parseSourceTransferMode(modeValue)
+	if err != nil {
+		return importSourceTransfer{}, err
+	}
+	if mode == sourceTransferRemote {
+		normalized, err := normalizeImportSource(source)
+		if err != nil {
+			return importSourceTransfer{}, err
+		}
+		return importSourceTransfer{Source: normalized}, nil
+	}
+	local, ok, err := classifyLocalImportSource(source)
+	if err != nil {
+		return importSourceTransfer{}, err
+	}
+	if ok {
+		return importSourceTransfer{Source: local.Source, Upload: true, Local: local}, nil
+	}
+	if mode == sourceTransferUpload {
+		return importSourceTransfer{}, fmt.Errorf("--source-mode upload requires an existing local directory, .tgz/.tar.gz/.zip archive, or npm: local path source")
+	}
+	normalized, err := normalizeImportSource(source)
+	if err != nil {
+		return importSourceTransfer{}, err
+	}
+	return importSourceTransfer{Source: normalized}, nil
+}
+
+func parseSourceTransferMode(value string) (sourceTransferMode, error) {
+	switch mode := sourceTransferMode(value); mode {
+	case sourceTransferAuto, sourceTransferUpload, sourceTransferRemote:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("invalid source mode %q: expected auto, upload, or remote", value)
+	}
+}
+
+func classifyLocalImportSource(raw string) (localImportSource, bool, error) {
+	npmLocal := false
+	source := raw
+	if strings.HasPrefix(source, "npm:") {
+		npmLocal = true
+		source = strings.TrimPrefix(source, "npm:")
+	}
+	if source == "" || strings.Contains(source, "://") {
+		return localImportSource{}, false, nil
+	}
+	packageSource, serviceRoot, hasServiceRoot := strings.Cut(source, "//")
+	if packageSource == "" {
+		return localImportSource{}, false, nil
+	}
+	info, err := os.Stat(packageSource)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return localImportSource{}, false, nil
+		}
+		return localImportSource{}, false, fmt.Errorf("stat import source %q: %w", packageSource, err)
+	}
+	abs, err := filepath.Abs(packageSource)
+	if err != nil {
+		return localImportSource{}, false, fmt.Errorf("resolve import source %q: %w", packageSource, err)
+	}
+	var kind packageimport.UploadKind
+	if info.IsDir() {
+		kind = packageimport.UploadKindDirectory
+	} else if info.Mode().IsRegular() && supportedImportArchive(packageSource) {
+		kind = packageimport.UploadKindArchive
+	} else {
+		return localImportSource{}, false, nil
+	}
+	if npmLocal {
+		kind = packageimport.UploadKindNPMLocal
+	}
+	display := filepath.Base(filepath.Clean(abs))
+	sanitized := "client-upload:" + display
+	if hasServiceRoot {
+		sanitized += "//" + serviceRoot
+	}
+	return localImportSource{Path: abs, Source: sanitized, UploadKind: kind}, true, nil
+}
+
+func supportedImportArchive(path string) bool {
+	lower := strings.ToLower(path)
+	return strings.HasSuffix(lower, ".tgz") || strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".zip")
 }
 
 func (c *CLI) instanceCommand() *cobra.Command {
@@ -1095,6 +1213,10 @@ func (c *CLI) requestServiceImport(body any) error {
 	client := *c.Client
 	client.Timeout = 0
 	return c.doRequestWithClientAndHeaders(&client, http.MethodPost, "/admin/v1/services/import", body, map[string]string{"Accept": "application/x-ndjson"}, c.handleServiceImportStream)
+}
+
+func (c *CLI) requestServiceImportUpload(body any, source localImportSource) error {
+	return errors.New("service import upload request is not implemented")
 }
 
 func (c *CLI) requestStream(method, path string, body any) error {

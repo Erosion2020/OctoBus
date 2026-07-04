@@ -211,20 +211,28 @@
 
 参考文档：[实施计划阶段 3](docs/plan/remote-service-import-implementation-plan.md#阶段-3cli-实现-source-mode-和-multipart-上传)。
 
-- [ ] 3.1 增加 `--source-mode` 并实现本地 source 判定
+- [x] 3.1 增加 `--source-mode` 并实现本地 source 判定
   - 依赖：2.4。
   - 工作内容：在 `service import` 增加 `--source-mode auto|upload|remote`；实现本地 source 解析 helper，支持目录、`.tgz/.tar.gz/.zip` 和 `npm:` local path；`auto` 不使用 `--addr` 判断。
   - 可并行子任务：
-    - [ ] 可并行：实现 flag、参数校验和 help 文案。
-    - [ ] 可并行：实现 local source classification，包括 `npm:`、`//service-dir` 和 recursive scan root。
-    - [ ] 可并行：补充 `auto`、`upload`、`remote` source mode 单元测试。
+    - [x] 可并行：实现 flag、参数校验和 help 文案。
+    - [x] 可并行：实现 local source classification，包括 `npm:`、`//service-dir` 和 recursive scan root。
+    - [x] 可并行：补充 `auto`、`upload`、`remote` source mode 单元测试。
   - 测试方案：`go test ./internal/cli`。
   - 验收标准：本地 source 存在且类型受支持时 `auto` 判定为上传；`remote` 永远走 JSON；`upload` 对不存在或不支持 source fail-fast。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/cli/cli.go` 为 `service import` 增加 `--source-mode auto|upload|remote`，默认 `auto`。
+      - 新增 source transfer mode 解析、本地 source 分类和 sanitized `client-upload:<basename>` source 生成逻辑。
+      - 本地分类支持目录、`.tgz/.tar.gz/.zip`、`npm:` 本地路径和 `//service-dir`/recursive scan root；`auto` 不读取或依赖 admin address。
+      - `remote` 保持现有 JSON normalize 行为；`upload` 对不存在或不支持的本地 source fail-fast。
+      - 在 `internal/cli/cli_test.go` 增加 source-mode helper 测试和非法 flag 测试，并将旧本地路径转绝对路径测试显式切到 `--source-mode remote`。
+    - 验证：
+      - `go test ./internal/cli` 通过。
+    - 审计与例外：
+      - 真实 multipart request builder 尚未实现；`requestServiceImportUpload` 当前是 3.2 待替换占位。
+      - 默认 `auto` 已能判定本地 source 应上传，但实际上传行为需 3.2 接通请求体后完整可用。
     - 下一目标：3.2 CLI multipart 请求。
 
 - [ ] 3.2 实现 CLI multipart 请求和目录打包

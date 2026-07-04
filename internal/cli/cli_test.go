@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"octobus/internal/packageimport"
 	"octobus/internal/version"
 )
 
@@ -331,7 +332,7 @@ func TestServiceImportRecursiveRequestConvertsLocalNPMSourceToAbsolutePath(t *te
 	}))
 	defer server.Close()
 	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard}
-	if err := c.Run([]string{"service", "import", "--recursive", "npm:./pkg"}); err != nil {
+	if err := c.Run([]string{"service", "import", "--recursive", "--source-mode", "remote", "npm:./pkg"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -381,6 +382,87 @@ func TestNormalizeImportSourcePreservesServiceRoot(t *testing.T) {
 	}
 }
 
+func TestResolveImportSourceTransferModes(t *testing.T) {
+	tmp := t.TempDir()
+	pkg := filepath.Join(tmp, "pkg")
+	if err := os.Mkdir(pkg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(tmp, "service.tar.gz")
+	if err := os.WriteFile(archive, []byte("fixture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	unsupported := filepath.Join(tmp, "notes.txt")
+	if err := os.WriteFile(unsupported, []byte("fixture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	absPkg, err := filepath.Abs("pkg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	absUnsupported, err := filepath.Abs("notes.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name       string
+		source     string
+		mode       string
+		wantSource string
+		wantUpload bool
+		wantPath   string
+		wantKind   packageimport.UploadKind
+		wantErr    string
+	}{
+		{name: "auto local directory", source: "./pkg//nested", mode: "auto", wantSource: "client-upload:pkg//nested", wantUpload: true, wantPath: absPkg, wantKind: packageimport.UploadKindDirectory},
+		{name: "auto local archive", source: "service.tar.gz", mode: "auto", wantSource: "client-upload:service.tar.gz", wantUpload: true, wantPath: archive, wantKind: packageimport.UploadKindArchive},
+		{name: "auto npm local", source: "npm:./pkg", mode: "auto", wantSource: "client-upload:pkg", wantUpload: true, wantPath: absPkg, wantKind: packageimport.UploadKindNPMLocal},
+		{name: "auto missing keeps json", source: "missing", mode: "auto", wantSource: "missing"},
+		{name: "auto unsupported file keeps json", source: "notes.txt", mode: "auto", wantSource: absUnsupported},
+		{name: "remote local directory keeps json", source: "./pkg", mode: "remote", wantSource: absPkg},
+		{name: "upload missing fails", source: "missing", mode: "upload", wantErr: "--source-mode upload requires"},
+		{name: "upload unsupported fails", source: "notes.txt", mode: "upload", wantErr: "--source-mode upload requires"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolveImportSourceTransfer(tc.source, tc.mode)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("resolveImportSourceTransfer error=%v want %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Source != tc.wantSource || got.Upload != tc.wantUpload {
+				t.Fatalf("transfer=%+v want source=%q upload=%v", got, tc.wantSource, tc.wantUpload)
+			}
+			if tc.wantUpload {
+				if got.Local.Path != tc.wantPath || got.Local.Source != tc.wantSource || got.Local.UploadKind != tc.wantKind {
+					t.Fatalf("local transfer=%+v want path=%q source=%q kind=%q", got.Local, tc.wantPath, tc.wantSource, tc.wantKind)
+				}
+				if strings.Contains(got.Source, tmp) {
+					t.Fatalf("upload source leaked absolute path: %+v", got)
+				}
+			}
+		})
+	}
+}
+
 func TestServiceImportRequestConvertsLocalSourceToAbsolutePath(t *testing.T) {
 	tmp := t.TempDir()
 	source := filepath.Join(tmp, "service.tgz")
@@ -415,7 +497,7 @@ func TestServiceImportRequestConvertsLocalSourceToAbsolutePath(t *testing.T) {
 	}))
 	defer server.Close()
 	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard}
-	if err := c.Run([]string{"service", "import", "echo", "service.tgz"}); err != nil {
+	if err := c.Run([]string{"service", "import", "--source-mode", "remote", "echo", "service.tgz"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -455,7 +537,7 @@ func TestServiceImportRequestConvertsLocalNPMSourceToAbsolutePath(t *testing.T) 
 	}))
 	defer server.Close()
 	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard}
-	if err := c.Run([]string{"service", "import", "echo", "npm:./pkg"}); err != nil {
+	if err := c.Run([]string{"service", "import", "--source-mode", "remote", "echo", "npm:./pkg"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1071,6 +1153,7 @@ func TestCommandValidationErrors(t *testing.T) {
 		{name: "service import recursive source", args: []string{"service", "import", "--recursive"}, want: "service source is required"},
 		{name: "service import recursive extra arg", args: []string{"service", "import", "--recursive", "pkg", "extra"}, want: "accepts 1 arg(s), received 2"},
 		{name: "service import recursive name", args: []string{"service", "import", "--recursive", "--name", "Name", "pkg"}, want: "--name cannot be used with --recursive"},
+		{name: "service import source mode", args: []string{"service", "import", "--source-mode", "other", "echo", "missing"}, want: "invalid source mode"},
 		{name: "service update id", args: []string{"service", "update"}, want: "service id is required"},
 		{name: "service update name", args: []string{"service", "update", "echo"}, want: "service name is required"},
 		{name: "service get", args: []string{"service", "get"}, want: "service id is required"},

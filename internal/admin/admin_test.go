@@ -315,6 +315,45 @@ func TestAdminServiceImportAndRestartLogs(t *testing.T) {
 	}
 }
 
+func TestAdminServiceImportJSONContentTypeCompatibility(t *testing.T) {
+	called := false
+	srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+		called = true
+		if opts.ServiceID != "echo" || opts.Source != "fixture" || !opts.Offline || opts.Build != "never" {
+			t.Fatalf("unexpected JSON import options: %+v", opts)
+		}
+		return packageimport.Result{Service: domain.Service{ID: opts.ServiceID, Name: "Echo", RuntimeMode: domain.RuntimeModeOnDemand}}, nil
+	}}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(`{"service_id":"echo","source":"fixture","offline":true,"build":"never"}`))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	w := httptest.NewRecorder()
+	srv.handleServiceImport(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !called {
+		t.Fatal("JSON service import did not call importer")
+	}
+}
+
+func TestAdminServiceImportRejectsUnsupportedContentType(t *testing.T) {
+	srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+		t.Fatal("importer should not be called for unsupported content type")
+		return packageimport.Result{}, nil
+	}}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(`{"service_id":"echo","source":"fixture"}`))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	srv.handleServiceImport(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "unsupported service import content type") || !strings.Contains(body, "application/json") || !strings.Contains(body, "multipart/form-data") {
+		t.Fatalf("unsupported content type response was not clear: %s", body)
+	}
+}
+
 func TestAdminRecursiveServiceImportValidation(t *testing.T) {
 	dataDir := t.TempDir()
 	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))

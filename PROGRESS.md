@@ -119,19 +119,25 @@
 
 参考文档：[实施计划阶段 2](docs/plan/remote-service-import-implementation-plan.md#阶段-2admin-api-接受-multipart-import)。
 
-- [ ] 2.1 实现 import 请求 Content-Type 分流
+- [x] 2.1 实现 import 请求 Content-Type 分流
   - 依赖：1.4。
   - 工作内容：在 `internal/admin/admin.go` 的 `handleServiceImport` 中按 `Content-Type` 分流 JSON 和 `multipart/form-data`；JSON 路径保持现有 `readJSON` 和 streaming 行为，未知类型返回明确 `400`。
   - 可并行子任务：
-    - [ ] 可并行：补充 JSON import 兼容测试，确认旧请求仍调用 fake importer。
-    - [ ] 可并行：补充未知 Content-Type 错误测试。
+    - [x] 可并行：补充 JSON import 兼容测试，确认旧请求仍调用 fake importer。
+    - [x] 可并行：补充未知 Content-Type 错误测试。
   - 测试方案：`go test ./internal/admin`。
   - 验收标准：现有 Admin JSON import 测试不需要改成 multipart；错误响应清晰。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/admin/admin.go` 增加 `readServiceImportRequest`，按 `Content-Type` 分流 service import 请求。
+      - 空 Content-Type 和 `application/json` 保持现有 `readJSON` 兼容路径；`multipart/form-data` 进入 2.2 待实现的 `readMultipartServiceImport` 占位入口；未知类型返回明确 `400`。
+      - 在 `internal/admin/admin_test.go` 增加 JSON Content-Type 兼容测试和未知 Content-Type 错误测试，确认 unsupported type 不调用 importer。
+    - 验证：
+      - `go test ./internal/admin` 通过。
+    - 审计与例外：
+      - 本任务不解析 multipart body、不创建临时文件，也不改变 streaming、recursive、restart 处理函数；这些保持现有调用链。
+      - `multipart/form-data` 当前只完成分流占位，实际 options/package 解析和 cleanup 留给 2.2。
     - 下一目标：2.2 multipart 解析与临时文件。
 
 - [ ] 2.2 解析 multipart 并设置 `Options.Upload`

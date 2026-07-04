@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -401,8 +402,11 @@ func (s *Server) handleServiceImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	var req packageimport.Options
-	if err := readJSON(r, &req); err != nil {
+	req, cleanup, err := readServiceImportRequest(r)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -428,6 +432,31 @@ func (s *Server) handleServiceImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"service": res.Service, "restarted_instances": restarted, "restart_errors": restartErrs})
+}
+
+func readServiceImportRequest(r *http.Request) (packageimport.Options, func(), error) {
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "" {
+		var req packageimport.Options
+		return req, nil, readJSON(r, &req)
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return packageimport.Options{}, nil, fmt.Errorf("invalid service import content type: %w", err)
+	}
+	switch mediaType {
+	case "application/json":
+		var req packageimport.Options
+		return req, nil, readJSON(r, &req)
+	case "multipart/form-data":
+		return readMultipartServiceImport(r)
+	default:
+		return packageimport.Options{}, nil, fmt.Errorf("unsupported service import content type %q: expected application/json or multipart/form-data", mediaType)
+	}
+}
+
+func readMultipartServiceImport(r *http.Request) (packageimport.Options, func(), error) {
+	return packageimport.Options{}, nil, errors.New("multipart service import is not implemented")
 }
 
 func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Request, req packageimport.Options) {

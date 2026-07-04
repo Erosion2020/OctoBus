@@ -353,20 +353,28 @@
       - daemon 和 CLI 在同一测试主机上运行，无法物理隔离文件系统；测试通过 `SOURCE="."` 和不同 CLI 工作目录证明默认 `auto` 选择上传路径，并以 `client-upload:` 持久化作为黑盒证据。
     - 下一目标：4.3 文档更新。
 
-- [ ] 4.3 更新用户文档和设计文档
+- [x] 4.3 更新用户文档和设计文档
   - 依赖：4.1。
   - 工作内容：更新 `README.md`、`docs/design/product/cli.md`、`docs/design/technical/service-package.md`，说明默认 `auto` 上传客户端本地 source、`--source-mode remote`、`--source-mode upload`、localhost/Docker/port-forward 文件系统边界。
   - 可并行子任务：
-    - [ ] 可并行：更新 README 用户工作流和 additional notes。
-    - [ ] 可并行：更新 CLI 产品设计中命令形态和 source mode。
-    - [ ] 可并行：更新 service package 技术设计中 source 获取和 artifact 规则。
+    - [x] 可并行：更新 README 用户工作流和 additional notes。
+    - [x] 可并行：更新 CLI 产品设计中命令形态和 source mode。
+    - [x] 可并行：更新 service package 技术设计中 source 获取和 artifact 规则。
   - 测试方案：文档审阅；如文档引用命令示例，配合 4.1/4.2 测试结果校验示例可行。
   - 验收标准：文档描述与实现一致；没有把 `127.0.0.1` 描述为共享文件系统依据；未引入未实现能力。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 更新 `README.md` 基础工作流和 Additional notes，说明默认 `--source-mode auto` 上传客户端本地目录/archive/`npm:` local path，并说明 `remote` 与 `upload` 的使用场景。
+      - 更新 `docs/design/product/cli.md`，把 `--source-mode` 纳入命令形态，并记录 `auto|remote|upload` 三态语义。
+      - 更新 `docs/design/technical/service-package.md`，说明 source 获取位置、上传目录/archive 的 artifact/build 规则、`client-upload:<basename>` 持久化规则，以及不保存客户端绝对路径或 daemon 临时路径。
+      - 明确 `127.0.0.1`、`localhost`、Docker 端口映射、SSH tunnel、kubectl port-forward 和反向代理都不能作为共享文件系统依据。
+    - 验证：
+      - `rg -n "source-mode|client-local|client-upload|Docker|port-forward|kubectl|loopback|共享文件系统|客户端上传|上传 archive|构建只适用于" README.md docs/design/product/cli.md docs/design/technical/service-package.md` 用于审阅新增和相关旧表述。
+      - 文档示例行为已由 4.1 integration 和 4.2 e2e 覆盖；本任务未重新运行代码测试。
+    - 审计与例外：
+      - 未更新 `README.zh-CN.md`，因为本阶段计划和验收范围只列出 `README.md` 与两个 design 文档。
+      - 未新增未实现能力：没有承诺通用上传 API、stdin upload、服务端配额、断点续传、daemon 反向访问 CLI 文件或地址判断。
     - 下一目标：4.4 全量质量门禁。
 
 - [ ] 4.4 全量质量门禁和收口审计

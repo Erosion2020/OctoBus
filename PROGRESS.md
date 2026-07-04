@@ -164,20 +164,27 @@
       - NDJSON streaming、recursive aggregate 和 token middleware 复用语义留给 2.3/2.4 覆盖。
     - 下一目标：2.3 multipart streaming 和 recursive。
 
-- [ ] 2.3 复用 streaming、recursive 和 restart 语义
+- [x] 2.3 复用 streaming、recursive 和 restart 语义
   - 依赖：2.2。
   - 工作内容：确保 multipart 请求在 `Accept: application/x-ndjson` 下进入现有 streaming import；`recursive=true` 时走 `ImportRecursive` 并复用现有 recursive validation；普通响应和 degraded restart 语义不变。
   - 可并行子任务：
-    - [ ] 可并行：补充 multipart NDJSON streaming complete/error 测试。
-    - [ ] 可并行：补充 multipart recursive import validation 和 aggregate response 测试。
-    - [ ] 可并行：审计 admin logger 字段，避免记录 multipart body、token、secret、临时路径。
+    - [x] 可并行：补充 multipart NDJSON streaming complete/error 测试。
+    - [x] 可并行：补充 multipart recursive import validation 和 aggregate response 测试。
+    - [x] 可并行：审计 admin logger 字段，避免记录 multipart body、token、secret、临时路径。
   - 测试方案：`go test ./internal/admin`。
   - 验收标准：multipart 单 service、recursive、NDJSON 三条路径均到达 importer；现有 JSON streaming 测试不回归。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/admin/admin.go` 增加 `serviceImportErrorMessage`，对带 `Options.Upload` 的 import 错误响应、NDJSON error event 和 admin 日志隐藏上传临时文件路径及其临时目录。
+      - 普通、recursive、streaming 和 streaming recursive 四条 import 错误路径均使用同一 sanitizer；非上传 JSON import 保持原错误文本。
+      - 在 `internal/admin/admin_test.go` 增加 multipart NDJSON complete/error 测试、recursive aggregate 测试和 recursive validation 测试。
+      - 测试覆盖 multipart upload 在 streaming/recursive 路径到达 fake importer、请求结束后 cleanup，并断言错误响应和日志不包含上传临时路径。
+    - 验证：
+      - `go test ./internal/admin` 通过。
+    - 审计与例外：
+      - Admin logger 当前只记录 service id、offline/reinstall/build、runtime mode、descriptor hash、method count 等字段；未新增 multipart body、Authorization、token、secret 或临时路径字段。
+      - Admin token middleware 对 multipart 请求的覆盖留给 2.4 阶段收口。
     - 下一目标：2.4 Admin 阶段收口。
 
 - [ ] 2.4 Admin 阶段收口

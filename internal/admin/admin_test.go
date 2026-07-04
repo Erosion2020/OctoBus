@@ -468,6 +468,148 @@ func TestAdminServiceImportMultipartValidationErrors(t *testing.T) {
 	}
 }
 
+func TestAdminServiceImportMultipartStreamingCompleteAndError(t *testing.T) {
+	t.Run("complete", func(t *testing.T) {
+		var uploadPath string
+		srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+			if opts.Upload == nil || opts.Upload.Kind != packageimport.UploadKindDirectory {
+				t.Fatalf("streaming multipart import missing upload: %+v", opts)
+			}
+			if opts.Progress == nil {
+				t.Fatal("streaming multipart import missing progress callback")
+			}
+			uploadPath = opts.Upload.Path
+			if err := opts.Progress(packageimport.ImportProgressEvent{Type: "status", Stage: "prepare_source", Message: "Preparing service package", ServiceID: opts.ServiceID}); err != nil {
+				return packageimport.Result{}, err
+			}
+			return packageimport.Result{Service: domain.Service{ID: opts.ServiceID, Name: "Echo", RuntimeMode: domain.RuntimeModeOnDemand}}, nil
+		}}}
+		req := newMultipartServiceImportRequest(t,
+			multipartTestPart{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture","offline":true}`},
+			multipartTestPart{name: "upload_kind", value: "directory"},
+			multipartTestPart{name: "package", filename: "package.tgz", value: "package bytes"},
+		)
+		req.Header.Set("Accept", "application/x-ndjson")
+		w := httptest.NewRecorder()
+		srv.handleServiceImport(w, req)
+		if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/x-ndjson") {
+			t.Fatalf("status=%d content-type=%q body=%s", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+		}
+		body := w.Body.String()
+		if !strings.Contains(body, `"type":"status"`) || !strings.Contains(body, `"type":"complete"`) {
+			t.Fatalf("streaming multipart body missing events: %s", body)
+		}
+		if uploadPath == "" {
+			t.Fatal("streaming multipart import did not capture upload path")
+		}
+		if _, err := os.Stat(uploadPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("streaming multipart temp file was not cleaned: %v", err)
+		}
+	})
+
+	t.Run("error redacts upload path", func(t *testing.T) {
+		var out bytes.Buffer
+		var uploadPath string
+		srv := &Server{
+			Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+				if opts.Upload == nil {
+					t.Fatal("streaming multipart import missing upload")
+				}
+				uploadPath = opts.Upload.Path
+				return packageimport.Result{}, fmt.Errorf("failed reading %s in %s", opts.Upload.Path, filepath.Dir(opts.Upload.Path))
+			}},
+			Logger: slog.New(slog.NewTextHandler(&out, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		}
+		req := newMultipartServiceImportRequest(t,
+			multipartTestPart{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture","offline":true}`},
+			multipartTestPart{name: "upload_kind", value: "directory"},
+			multipartTestPart{name: "package", filename: "package.tgz", value: "package bytes"},
+		)
+		req.Header.Set("Accept", "application/x-ndjson")
+		w := httptest.NewRecorder()
+		srv.handleServiceImport(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		if uploadPath == "" {
+			t.Fatal("streaming multipart import did not capture upload path")
+		}
+		uploadDir := filepath.Dir(uploadPath)
+		for _, got := range []string{w.Body.String(), out.String()} {
+			if strings.Contains(got, uploadPath) || strings.Contains(got, uploadDir) {
+				t.Fatalf("streaming multipart error leaked upload path or dir:\n%s", got)
+			}
+			if !strings.Contains(got, "uploaded package") {
+				t.Fatalf("streaming multipart error did not include redacted marker:\n%s", got)
+			}
+		}
+		if _, err := os.Stat(uploadPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("streaming multipart temp file was not cleaned after error: %v", err)
+		}
+	})
+}
+
+func TestAdminServiceImportMultipartRecursiveAggregateAndValidation(t *testing.T) {
+	t.Run("aggregate", func(t *testing.T) {
+		var uploadPath string
+		srv := &Server{Importer: fakeServiceImporter{importRecursiveFn: func(ctx context.Context, opts packageimport.Options) (packageimport.RecursiveResult, error) {
+			if !opts.Recursive || opts.Upload == nil || opts.Upload.Kind != packageimport.UploadKindDirectory {
+				t.Fatalf("recursive multipart import options mismatch: %+v", opts)
+			}
+			uploadPath = opts.Upload.Path
+			return packageimport.RecursiveResult{
+				Services:     []domain.Service{{ID: "echo", Name: "Echo", RuntimeMode: domain.RuntimeModeOnDemand}},
+				ServiceCount: 1,
+			}, nil
+		}}}
+		req := newMultipartServiceImportRequest(t,
+			multipartTestPart{name: "options", value: `{"recursive":true,"source":"client-upload:fixture","offline":true}`},
+			multipartTestPart{name: "upload_kind", value: "directory"},
+			multipartTestPart{name: "package", filename: "package.tgz", value: "package bytes"},
+		)
+		w := httptest.NewRecorder()
+		srv.handleServiceImport(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), `"service_count":1`) || !strings.Contains(w.Body.String(), `"echo"`) {
+			t.Fatalf("recursive multipart aggregate body mismatch: %s", w.Body.String())
+		}
+		if uploadPath == "" {
+			t.Fatal("recursive multipart import did not capture upload path")
+		}
+		if _, err := os.Stat(uploadPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("recursive multipart temp file was not cleaned: %v", err)
+		}
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		tempRoot := t.TempDir()
+		t.Setenv("TMPDIR", tempRoot)
+		srv := &Server{Importer: fakeServiceImporter{importRecursiveFn: func(ctx context.Context, opts packageimport.Options) (packageimport.RecursiveResult, error) {
+			t.Fatal("recursive importer should not be called for invalid multipart options")
+			return packageimport.RecursiveResult{}, nil
+		}}}
+		req := newMultipartServiceImportRequest(t,
+			multipartTestPart{name: "options", value: `{"recursive":true,"service_id":"echo","source":"client-upload:fixture","offline":true}`},
+			multipartTestPart{name: "upload_kind", value: "directory"},
+			multipartTestPart{name: "package", filename: "package.tgz", value: "package bytes"},
+		)
+		w := httptest.NewRecorder()
+		srv.handleServiceImport(w, req)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "service_id cannot be used with recursive import") {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		entries, err := os.ReadDir(tempRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("recursive validation did not clean multipart temp dir: %+v", entries)
+		}
+	})
+}
+
 type multipartTestPart struct {
 	name     string
 	filename string

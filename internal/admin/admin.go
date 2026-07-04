@@ -423,8 +423,9 @@ func (s *Server) handleServiceImport(w http.ResponseWriter, r *http.Request) {
 	s.logger().Info("service_import_started", "service_id", req.ServiceID, "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
 	res, err := s.Importer.Import(r.Context(), req)
 	if err != nil {
-		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		msg := serviceImportErrorMessage(err, req)
+		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", msg)
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	s.logger().Info("service_import_done", "service_id", res.Service.ID, "runtime_mode", res.Service.RuntimeMode, "descriptor_sha256", res.Service.DescriptorSHA256, "method_count", len(res.Service.Methods))
@@ -562,6 +563,23 @@ func parseMultipartUploadKind(raw string) (packageimport.UploadKind, error) {
 	}
 }
 
+func serviceImportErrorMessage(err error, req packageimport.Options) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if req.Upload == nil || req.Upload.Path == "" {
+		return msg
+	}
+	uploadPath := req.Upload.Path
+	msg = strings.ReplaceAll(msg, uploadPath, "<uploaded package>")
+	uploadDir := filepath.Dir(uploadPath)
+	if uploadDir != "." && uploadDir != "" {
+		msg = strings.ReplaceAll(msg, uploadDir, "<upload temp dir>")
+	}
+	return msg
+}
+
 func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Request, req packageimport.Options) {
 	if req.Source == "" {
 		writeError(w, http.StatusBadRequest, "service package source is required")
@@ -578,8 +596,9 @@ func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Req
 	s.logger().Info("service_import_recursive_started", "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
 	res, err := s.Importer.ImportRecursive(r.Context(), req)
 	if err != nil {
-		s.logger().Warn("service_import_recursive_failed", "error", err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		msg := serviceImportErrorMessage(err, req)
+		s.logger().Warn("service_import_recursive_failed", "error", msg)
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	s.logger().Info("service_import_recursive_done", "service_count", len(res.Services))
@@ -635,8 +654,9 @@ func (s *Server) handleStreamingServiceImport(w http.ResponseWriter, r *http.Req
 	s.logger().Info("service_import_started", "service_id", req.ServiceID, "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
 	res, err := s.Importer.Import(r.Context(), req)
 	if err != nil {
-		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", err)
-		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: err.Error()})
+		msg := serviceImportErrorMessage(err, req)
+		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", msg)
+		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: msg})
 		return
 	}
 	s.logger().Info("service_import_done", "service_id", res.Service.ID, "runtime_mode", res.Service.RuntimeMode, "descriptor_sha256", res.Service.DescriptorSHA256, "method_count", len(res.Service.Methods))
@@ -661,8 +681,9 @@ func (s *Server) handleStreamingRecursiveServiceImport(w http.ResponseWriter, r 
 	s.logger().Info("service_import_recursive_started", "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
 	res, err := s.Importer.ImportRecursive(r.Context(), req)
 	if err != nil {
-		s.logger().Warn("service_import_recursive_failed", "error", err)
-		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: err.Error()})
+		msg := serviceImportErrorMessage(err, req)
+		s.logger().Warn("service_import_recursive_failed", "error", msg)
+		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: msg})
 		return
 	}
 	s.logger().Info("service_import_recursive_done", "service_count", len(res.Services))

@@ -49,20 +49,28 @@
       - 未实现 `prepareUploadedSource`，按计划留给 1.2。
     - 下一目标：1.2 上传源 prepare 流程。
 
-- [ ] 1.2 实现 `prepareUploadedSource`
+- [x] 1.2 实现 `prepareUploadedSource`
   - 依赖：1.1。
   - 工作内容：在 `prepareSource` 开头分支 `opts.Upload != nil`，实现 daemon 临时上传文件到 `preparedSource` 的转换；上传目录和 `npm-local` 目录解包为 package root 且 `BuildAllowed=true`，上传 archive 解包并 `BuildAllowed=false`，`PackageSource` 使用 `client-upload:<basename>` 及 `//service-root`。
   - 可并行子任务：
-    - [ ] 可并行：实现上传目录 tar.gz 解包、sha256、`PackageDir` 和 `PackageSource` 处理。
-    - [ ] 可并行：实现上传 archive `.tgz/.tar.gz/.zip` 解包、`normalizePackageDir` 和 `BuildAllowed=false` 处理。
-    - [ ] 可并行：实现 `npm-local` 上传类型校验，首版只接受目录和现有 archive 后缀。
+    - [x] 可并行：实现上传目录 tar.gz 解包、sha256、`PackageDir` 和 `PackageSource` 处理。
+    - [x] 可并行：实现上传 archive `.tgz/.tar.gz/.zip` 解包、`normalizePackageDir` 和 `BuildAllowed=false` 处理。
+    - [x] 可并行：实现 `npm-local` 上传类型校验，首版只接受目录和现有 archive 后缀。
   - 测试方案：`go test ./internal/packageimport`。
   - 验收标准：上传目录、上传 archive、上传 `npm-local` 均可生成正确 `preparedSource`；错误信息包含有用上下文；不读取客户端原始路径。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 在 `internal/packageimport/importer.go` 中让 `prepareSource` 优先处理 `Options.Upload`。
+      - 新增 `prepareUploadedSource`、上传目录/上传 archive 准备 helper、上传 archive 后缀识别和文件 hash helper。
+      - 上传 source 要求使用 `client-upload:` 展示源；目录和 `npm-local` 目录解包为 staging `package/` 根并 `BuildAllowed=true`；`.tgz/.tar.gz/.zip` archive 解包后 `BuildAllowed=false`。
+      - 错误路径不回显非 `client-upload:` 原始 source，避免后续 Admin 错误响应泄露客户端路径。
+      - 在 `internal/packageimport/importer_test.go` 增加上传目录、上传 archive、`npm-local` 目录/zip 和内部校验错误测试。
+    - 验证：
+      - `go test ./internal/packageimport` 通过。
+    - 审计与例外：
+      - 已复用现有 `untarGz`、`unzip`、`normalizePackageDir`、`sourceWithServiceRoot` 和 archive 安全路径校验。
+      - recursive import 的 `client-upload:<basename>//<discovered-root>` 持久化语义尚未调整，按计划留给 1.3。
     - 下一目标：1.3 上传 source 持久化和 recursive 行为。
 
 - [ ] 1.3 固定上传 source 持久化和 recursive 语义

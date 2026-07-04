@@ -468,6 +468,87 @@ func TestAdminServiceImportMultipartValidationErrors(t *testing.T) {
 	}
 }
 
+func TestAdminServiceImportMultipartSizeLimits(t *testing.T) {
+	orig := defaultServiceImportMultipartLimits
+	t.Cleanup(func() { defaultServiceImportMultipartLimits = orig })
+
+	tests := []struct {
+		name  string
+		limit serviceImportMultipartLimits
+		parts []multipartTestPart
+		want  string
+	}{
+		{
+			name: "options too large",
+			limit: serviceImportMultipartLimits{
+				OptionsBytes:    32,
+				UploadKindBytes: 32,
+				PackageBytes:    32,
+			},
+			parts: []multipartTestPart{
+				{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture"}`},
+				{name: "upload_kind", value: "directory"},
+				{name: "package", filename: "package.tgz", value: "package"},
+			},
+			want: "options exceeds size limit",
+		},
+		{
+			name: "upload kind too large",
+			limit: serviceImportMultipartLimits{
+				OptionsBytes:    32,
+				UploadKindBytes: 4,
+				PackageBytes:    32,
+			},
+			parts: []multipartTestPart{
+				{name: "options", value: `{}`},
+				{name: "upload_kind", value: "directory"},
+				{name: "package", filename: "package.tgz", value: "package"},
+			},
+			want: "upload_kind exceeds size limit",
+		},
+		{
+			name: "package too large",
+			limit: serviceImportMultipartLimits{
+				OptionsBytes:    32,
+				UploadKindBytes: 32,
+				PackageBytes:    8,
+			},
+			parts: []multipartTestPart{
+				{name: "options", value: `{}`},
+				{name: "upload_kind", value: "directory"},
+				{name: "package", filename: "package.tgz", value: "package bytes"},
+			},
+			want: "package exceeds size limit",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defaultServiceImportMultipartLimits = tc.limit
+			tempRoot := t.TempDir()
+			t.Setenv("TMPDIR", tempRoot)
+			srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+				t.Fatal("importer should not be called for oversized multipart request")
+				return packageimport.Result{}, nil
+			}}}
+			w := httptest.NewRecorder()
+			srv.handleServiceImport(w, newMultipartServiceImportRequest(t, tc.parts...))
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.want) {
+				t.Fatalf("body=%s want %q", w.Body.String(), tc.want)
+			}
+			entries, err := os.ReadDir(tempRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("multipart temp dir was not cleaned after size error: %+v", entries)
+			}
+		})
+	}
+}
+
 func TestAdminServiceImportMultipartStreamingCompleteAndError(t *testing.T) {
 	t.Run("complete", func(t *testing.T) {
 		var uploadPath string

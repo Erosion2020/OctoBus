@@ -5,6 +5,7 @@
   "type": "module",
   "bin": {
     "octobus-tentacles": "bin/octobus-tentacles.js",
+    "aliyun-waf3": "bin/aliyun-waf3.js",
     "alibaba-cloud-simple-application-server-firewall": "bin/alibaba-cloud-simple-application-server-firewall.js",
     "cloudatlas": "bin/cloudatlas.js",
     "das-gateway-v3": "bin/das-gateway-v3.js",
@@ -71,6 +72,7 @@
     "opencti": "bin/opencti.js"
   },
   "files": [
+    "bin/aliyun-waf3.js",
     "bin/alibaba-cloud-simple-application-server-firewall.js",
     "bin/cloudatlas.js",
     "bin/das-gateway-v3.js",
@@ -200,6 +202,7 @@
     "fofa__network-space-mapper",
     "wangsu__label-ip",
     "scripts",
+    "aliyun__waf3",
     "bin/octobus-tentacles.js"
   ],
   "scripts": {
@@ -210,12 +213,14 @@
     "pack:check": "npm pack --dry-run"
   },
   "dependencies": {
+    "@alicloud/pop-core": "^1.8.0",
     "@alicloud/swas-open20200601": "^4.0.0",
     "@chaitin-ai/octobus-sdk": "^0.6.0",
     "commander": "^12.1.0",
     "undici": "^7.16.0"
   },
   "bundledDependencies": [
+    "@alicloud/pop-core",
     "@alicloud/swas-open20200601",
     "@chaitin-ai/octobus-sdk",
     "commander",

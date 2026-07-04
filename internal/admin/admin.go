@@ -42,6 +42,18 @@ type serviceImporter interface {
 	ImportRecursive(context.Context, packageimport.Options) (packageimport.RecursiveResult, error)
 }
 
+type serviceImportMultipartLimits struct {
+	OptionsBytes    int64
+	UploadKindBytes int64
+	PackageBytes    int64
+}
+
+var defaultServiceImportMultipartLimits = serviceImportMultipartLimits{
+	OptionsBytes:    16 << 20,
+	UploadKindBytes: 64 << 10,
+	PackageBytes:    4 << 30,
+}
+
 type instanceResponse struct {
 	ID           string                `json:"ID"`
 	ServiceID    string                `json:"ServiceID"`
@@ -490,7 +502,11 @@ func readMultipartServiceImport(r *http.Request) (packageimport.Options, func(),
 			if haveOptions {
 				return fail(errors.New("multipart service import contains duplicate options part"))
 			}
-			if err := decodeStrictJSON(part, &req); err != nil {
+			raw, err := readLimitedMultipartPart(part, defaultServiceImportMultipartLimits.OptionsBytes, "options")
+			if err != nil {
+				return fail(err)
+			}
+			if err := decodeStrictJSON(bytes.NewReader(raw), &req); err != nil {
 				return fail(fmt.Errorf("decode multipart options: %w", err))
 			}
 			haveOptions = true
@@ -498,9 +514,9 @@ func readMultipartServiceImport(r *http.Request) (packageimport.Options, func(),
 			if haveUploadKind {
 				return fail(errors.New("multipart service import contains duplicate upload_kind field"))
 			}
-			raw, err := io.ReadAll(part)
+			raw, err := readLimitedMultipartPart(part, defaultServiceImportMultipartLimits.UploadKindBytes, "upload_kind")
 			if err != nil {
-				return fail(fmt.Errorf("read multipart upload_kind: %w", err))
+				return fail(err)
 			}
 			uploadKind, err = parseMultipartUploadKind(strings.TrimSpace(string(raw)))
 			if err != nil {
@@ -522,7 +538,7 @@ func readMultipartServiceImport(r *http.Request) (packageimport.Options, func(),
 			if err != nil {
 				return fail(fmt.Errorf("create service import upload file: %w", err))
 			}
-			_, copyErr := io.Copy(out, part)
+			_, copyErr := copyLimitedMultipartPart(out, part, defaultServiceImportMultipartLimits.PackageBytes, "package")
 			closeErr := out.Close()
 			if copyErr != nil {
 				return fail(fmt.Errorf("save service import upload: %w", copyErr))
@@ -552,6 +568,29 @@ func readMultipartServiceImport(r *http.Request) (packageimport.Options, func(),
 		DisplaySource: req.Source,
 	}
 	return req, cleanup, nil
+}
+
+func readLimitedMultipartPart(src io.Reader, limit int64, label string) ([]byte, error) {
+	var dst bytes.Buffer
+	if _, err := copyLimitedMultipartPart(&dst, src, limit, label); err != nil {
+		return nil, err
+	}
+	return dst.Bytes(), nil
+}
+
+func copyLimitedMultipartPart(dst io.Writer, src io.Reader, limit int64, label string) (int64, error) {
+	if limit < 0 {
+		return 0, fmt.Errorf("multipart service import %s size limit is invalid", label)
+	}
+	reader := &io.LimitedReader{R: src, N: limit + 1}
+	written, err := io.Copy(dst, reader)
+	if err != nil {
+		return written, fmt.Errorf("read multipart service import %s: %w", label, err)
+	}
+	if written > limit {
+		return written, fmt.Errorf("multipart service import %s exceeds size limit of %d bytes", label, limit)
+	}
+	return written, nil
 }
 
 func parseMultipartUploadKind(raw string) (packageimport.UploadKind, error) {

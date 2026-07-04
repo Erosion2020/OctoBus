@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "aliyun-waf3": {
+    entryFile: "../aliyun__waf3/bin/aliyun-waf3.js",
+    serviceModule: "../aliyun__waf3/src/service.js",
+  },
   "alibaba-cloud-simple-application-server-firewall": {
     entryFile: "../alibaba-cloud__simple-application-server-firewall/bin/alibaba-cloud-simple-application-server-firewall.js",
     serviceModule: "../alibaba-cloud__simple-application-server-firewall/src/service.js",

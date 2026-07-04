@@ -281,19 +281,25 @@
       - 更完整的 CLI 阶段测试覆盖审阅留给 3.4 收口。
     - 下一目标：3.4 CLI 阶段收口。
 
-- [ ] 3.4 CLI 阶段收口
+- [x] 3.4 CLI 阶段收口
   - 依赖：3.1、3.2、3.3。
   - 工作内容：运行 CLI focused tests，修复 request helper、timeout、Authorization、stream output 和 redaction 回归。
   - 可并行子任务：
-    - [ ] 可并行：运行并记录 `go test ./internal/cli`。
-    - [ ] 可并行：审阅 `internal/cli/cli_test.go` 是否覆盖 source mode、multipart、JSON 回退、localhost 场景。
+    - [x] 可并行：运行并记录 `go test ./internal/cli`。
+    - [x] 可并行：审阅 `internal/cli/cli_test.go` 是否覆盖 source mode、multipart、JSON 回退、localhost 场景。
   - 测试方案：`go test ./internal/cli`。
   - 验收标准：CLI 上传和 JSON 两类请求测试通过；service import stream progress/complete 输出不回归。
   - 完成总结：
-    - 状态：待完成。
-    - 变更：待完成。
-    - 验证：待完成。
-    - 审计与例外：待完成。
+    - 状态：已完成。
+    - 变更：
+      - 审阅 `internal/cli/cli_test.go` 中 source-mode、multipart 上传、JSON 回退、loopback auto、stream progress/complete 和 redaction 相关覆盖。
+      - 未新增生产代码；本任务为 CLI 阶段 focused gate 和覆盖审计收口。
+    - 验证：
+      - `go test ./internal/cli` 通过。
+      - `go test ./internal/cli -count=1` 通过。
+    - 审计与例外：
+      - CLI 上传和 JSON 两类请求均有单元测试覆盖；service import stream handler 继续由既有 progress/complete/degraded/redaction 测试覆盖。
+      - 尚未进行跨组件真实 Admin + CLI 流程验证，按计划留给 4.1 integration。
     - 下一目标：4.1 integration 测试。
 
 ## 4. 集成、E2E 和文档收尾

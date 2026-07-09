@@ -5,8 +5,16 @@
 // Bindings (secret): apiKey (sent as the `apiKey` HTTP header).
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 const DEFAULT_TIMEOUT_MS = 1500;
+
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
 
 const PKG = 'AiLPHA_Platform.AiLPHA_Platform';
 const LIST_ALARMS_PATH = `/${PKG}/ListMergeAlarms`;
@@ -181,7 +189,7 @@ export function rpcdef(ctx) {
     };
   };
 
-  const tlsOptions = () => (skipTlsVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {});
+  const tlsOptions = () => (skipTlsVerify ? { dispatcher: getInsecureTlsDispatcher() } : {});
 
   const buildQuery = (pairs) => {
     const parts = [];
@@ -205,10 +213,13 @@ export function rpcdef(ctx) {
         method,
         headers,
         body: hasBody ? JSON.stringify(bodyObj) : undefined,
-        timeoutMs,
+        signal: AbortSignal.timeout(timeoutMs),
         ...tlsOptions(),
       });
     } catch (e) {
+      if (e?.name === 'TimeoutError') {
+        throw errorWithCode('DEADLINE_EXCEEDED', `request timed out after ${timeoutMs}ms`);
+      }
       const reason = e?.cause?.message || e?.message || 'fetch failed';
       throw errorWithCode('UNAVAILABLE', reason);
     }

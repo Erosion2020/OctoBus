@@ -219,6 +219,33 @@ test('error mapping: endpoint, 401/403/404/500, network, bad json, empty body', 
   assert.deepEqual(out, { page: 0, size: 0, total: 0, data: [], order_by: '' });
 });
 
+test('timeout uses AbortSignal and maps TimeoutError to DEADLINE_EXCEEDED', async () => {
+  let init;
+  setFetch((u, i) => { init = i; return ok({ $page: 0, $size: 0, total: 0, data: [] }); });
+  await (await loadRpc({}))[listAlarmsPath]();
+  assert.ok(init.signal instanceof AbortSignal, 'fetch receives an AbortSignal');
+  assert.equal('timeoutMs' in init, false, 'no non-standard timeoutMs option');
+
+  setFetch(() => {
+    const e = new Error('The operation was aborted due to timeout');
+    e.name = 'TimeoutError';
+    throw e;
+  });
+  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /DEADLINE_EXCEEDED.*timed out after/);
+});
+
+test('skipTlsVerify passes an undici dispatcher instead of non-standard options', async () => {
+  let init;
+  setFetch((u, i) => { init = i; return ok({ $page: 0, $size: 0, total: 0, data: [] }); });
+
+  await (await loadRpc({}))[listAlarmsPath]();
+  assert.equal(init.dispatcher, undefined, 'no dispatcher by default');
+
+  await (await loadRpc({}, { bindings: { skipTlsVerify: true } }))[listAlarmsPath]();
+  assert.ok(init.dispatcher, 'dispatcher set when skipTlsVerify=true');
+  assert.equal('insecureSkipVerify' in init, false, 'no non-standard TLS options');
+});
+
 test('handlers / registerHandlers run through the legacy ctx wrapper', async () => {
   setFetch(() => ok({ $page: 1, $size: 10, total: 1, data: [{ id: 'a' }] }));
   const { handlers, _test } = await import('../src/ailpha-platform.js');

@@ -12,6 +12,8 @@ octobus service import --id ailpha-platform ./services/ailpha__platform
 
 Set `endpoint` to the platform base URL. `timeoutMs` (default 1500), `headers`, and `skipTlsVerify` are optional.
 
+`timeoutMs` is enforced with `AbortSignal.timeout`; `skipTlsVerify` uses a per-request undici dispatcher and does not change global TLS settings.
+
 ```json
 {
   "endpoint": "https://ailpha.example.com",

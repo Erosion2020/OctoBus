@@ -22,6 +22,7 @@ permissions:
 
 env:
   IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME || 'docker.io/chaitin/octobus' }}
+  REGISTRY: docker.io
 
 jobs:
   build-and-push:

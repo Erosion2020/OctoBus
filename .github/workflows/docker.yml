@@ -21,7 +21,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME || 'ghcr.io/chaitin/octobus' }}
+  IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME || 'docker.io/chaitin/octobus' }}
 
 jobs:
   build-and-push:

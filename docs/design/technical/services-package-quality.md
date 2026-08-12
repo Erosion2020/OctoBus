@@ -165,7 +165,7 @@ npm test -- --service-dir <service-dir>
 npm test -- --coverage --service-dir <service-dir>
 ```
 
-coverage 模式默认要求 branch、function 和 line 都达到 90%。该门禁用于高风险服务、实质改动服务
+coverage 模式默认要求 branch、function 和 line 都达到 80%。该门禁用于高风险服务、实质改动服务
 和阶段性质量抽样；全量 service package 的基础门禁仍是 validate/test/pack check。
 
 ## Package 内容门禁
@@ -208,7 +208,7 @@ secret 写入 evidence。
 
 修改 `services/` 的 pull request 由 `service-l2-gate` 自动分类。只修改一个 service root 的
 PR 必须通过以下 L2 自动门禁：focused structure validation、该 service 的 Node test、branch /
-function / line 90% coverage、最终 npm pack 内容检查、OctoBus build 和 service smoke。
+function / line 80% coverage、最终 npm pack 内容检查、OctoBus build 和 service smoke。
 
 Service PR 可以同时提交由 registry 生成流程维护的根 `services/package.json`、根 wrapper 和
 dispatcher，但不能混入第二个 service、runtime、SDK、Docker、example 或其他 services

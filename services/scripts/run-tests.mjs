@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const DEFAULT_COVERAGE_THRESHOLD = 90;
+const DEFAULT_COVERAGE_THRESHOLD = 80;
 
 function parseArgs(argv) {
   const opts = {

@@ -141,6 +141,12 @@ async function execute(command, args, options) {
   });
 }
 
+function preflightGate(worktree) {
+  const result = run("node", ["services/scripts/service-pr-gate.mjs", "--base", "HEAD^1", "--head", "HEAD", "--dry-run", "--skip-install", "--skip-smoke"], { cwd: worktree, allowFailure: true });
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+  return { code: result.status ?? 1, output, noService: output.includes("no service implementation changed") };
+}
+
 function summarizeLog(logPath) {
   const text = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
   const lines = text.split(/\r?\n/).filter((line) => /^(error:|✖|ℹ Error:|service gate:|service gate L2 candidates:)/.test(line));
@@ -166,6 +172,19 @@ async function auditPR(repoRoot, options, pr, gateSHA) {
   let result;
   try {
     overlayGate(repoRoot, worktree);
+    const preflight = preflightGate(worktree);
+    if (preflight.noService) {
+      result = { number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA,
+        status: "not-applicable", reason: "该 PR 不包含单 Service 实现改动，L2 不适用。",
+        summary: "service gate: no service implementation changed; L2 service checks are not applicable", startedAt };
+      return finish(result, options);
+    }
+    if (preflight.code !== 0) {
+      result = { number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA,
+        status: "failed", reason: "L2 静态范围或包结构预检失败。",
+        summary: preflight.output.split(/\r?\n/).filter((line) => line.startsWith("error:")).slice(-30).join("\n").slice(0, 6000), startedAt };
+      return finish(result, options);
+    }
     const fingerprint = attachDependencyPool(worktree, options, env);
     const code = await execute("node", ["services/scripts/service-pr-gate.mjs", "--base", "HEAD^1", "--head", "HEAD", "--skip-install"], { cwd: worktree, env, logPath });
     const summary = summarizeLog(logPath);

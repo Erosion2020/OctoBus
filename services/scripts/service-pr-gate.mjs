@@ -18,6 +18,7 @@ export function parseArgs(argv) {
     head: "HEAD",
     dryRun: false,
     skipSmoke: false,
+    skipInstall: false,
     changedFiles: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -30,6 +31,7 @@ export function parseArgs(argv) {
     else if (arg.startsWith("--changed-files=")) options.changedFiles = arg.slice(16).split(",").filter(Boolean);
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--skip-smoke") options.skipSmoke = true;
+    else if (arg === "--skip-install") options.skipInstall = true;
     else throw new Error(`unknown argument: ${arg}`);
   }
   return options;
@@ -81,9 +83,9 @@ export function classifyChanges(files, repoRoot) {
   return { errors, serviceDirs: [...serviceDirs].sort(), touchesCore, touchesServiceInfrastructure };
 }
 
-export function plannedCommands(serviceDirs, { skipSmoke = false } = {}) {
+export function plannedCommands(serviceDirs, { skipSmoke = false, skipInstall = false } = {}) {
   const commands = [];
-  commands.push(["npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], "services"]);
+  if (!skipInstall) commands.push(["npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], "services"]);
   for (const serviceDir of serviceDirs) {
     commands.push(["node", ["scripts/validate-service-package.mjs", "--service-dir", serviceDir], "services"]);
     commands.push(["node", ["scripts/run-tests.mjs", "--service-dir", serviceDir, "--coverage"], "services"]);

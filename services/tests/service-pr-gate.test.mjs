@@ -71,12 +71,19 @@ test("plans focused validation, coverage, packaging, build, and smoke", () => {
   ]);
 });
 
+test("can reuse a prepared dependency pool", () => {
+  const commands = plannedCommands(["vendor__product_v1"], { skipInstall: true, skipSmoke: true });
+  assert.equal(commands.some(([command, args]) => command === "npm" && args[0] === "install"), false);
+  assert.equal(commands.some(([command, args]) => command === "task" && args[0] === "build"), false);
+});
+
 test("parses CI and local execution options", () => {
-  assert.deepEqual(parseArgs(["--base", "origin/dev", "--head=abc", "--dry-run", "--skip-smoke", "--changed-files=a,b"]), {
+  assert.deepEqual(parseArgs(["--base", "origin/dev", "--head=abc", "--dry-run", "--skip-smoke", "--skip-install", "--changed-files=a,b"]), {
     base: "origin/dev",
     head: "abc",
     dryRun: true,
     skipSmoke: true,
+    skipInstall: true,
     changedFiles: ["a", "b"],
   });
 });

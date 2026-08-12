@@ -64,7 +64,7 @@ test("plans focused validation, coverage, packaging, build, and smoke", () => {
   assert.deepEqual(commands.map(([command, args]) => `${command} ${args.join(" ")}`), [
     "npm install --ignore-scripts --no-audit --no-fund",
     "node scripts/validate-service-package.mjs --service-dir vendor__product_v1",
-    "node scripts/run-tests.mjs --service-dir vendor__product_v1 --coverage",
+    "node scripts/run-tests.mjs --service-dir vendor__product_v1 --coverage --coverage-threshold=80",
     "npm run pack:check",
     "task build",
     "node scripts/service-package-smoke.mjs --service-dir vendor__product_v1 --fail-fast",

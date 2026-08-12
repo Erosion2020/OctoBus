@@ -53,8 +53,8 @@ function listPRs(options, repoRoot) {
 }
 
 function resultPath(options, number) { return path.join(options.stateDir, "results", `${number}.json`); }
-function readCached(options, pr, gateSHA) {
-  if (options.force || !fs.existsSync(resultPath(options, pr.number))) return null;
+export function readCached(options, pr, gateSHA) {
+  if (options.dryRun || options.force || !fs.existsSync(resultPath(options, pr.number))) return null;
   const cached = JSON.parse(fs.readFileSync(resultPath(options, pr.number), "utf8"));
   return cached.headSHA === pr.headRefOid && cached.gateSHA === gateSHA ? cached : null;
 }
@@ -78,14 +78,14 @@ function prepareWorktree(repoRoot, options, pr, mergeRef) {
   return worktree;
 }
 
-function overlayGate(repoRoot, worktree) {
+export function overlayGate(repoRoot, worktree, gateSHA) {
   for (const file of [
     "services/scripts/service-pr-gate.mjs", "services/scripts/run-tests.mjs",
     "services/scripts/validate-service-package.mjs", "scripts/service-package-smoke.mjs",
   ]) {
-    const source = path.join(repoRoot, file);
-    if (!fs.existsSync(source)) throw new Error(`gate file is missing: ${file}`);
-    const content = fs.readFileSync(source);
+    const shown = git(["show", `${gateSHA}:${file}`], repoRoot, { allowFailure: true });
+    if (shown.status !== 0) throw new Error(`gate file is missing at ${gateSHA}: ${file}`);
+    const content = shown.stdout;
     const target = path.join(worktree, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, content);
@@ -137,7 +137,18 @@ async function execute(command, args, options) {
   return await new Promise((resolve) => {
     const output = fs.openSync(options.logPath, "w");
     const child = spawn(command, args, { cwd: options.cwd, env: options.env, stdio: ["ignore", output, output] });
-    child.on("close", (code) => { fs.closeSync(output); resolve(code ?? 1); });
+    let closed = false;
+    const finish = (code) => {
+      if (closed) return;
+      closed = true;
+      fs.closeSync(output);
+      resolve(code);
+    };
+    child.on("error", (error) => {
+      fs.appendFileSync(options.logPath, `error: failed to start ${command}: ${error.message}\n`);
+      finish(1);
+    });
+    child.on("close", (code) => finish(code ?? 1));
   });
 }
 
@@ -160,7 +171,6 @@ async function auditPR(repoRoot, options, pr, gateSHA) {
   if (pr.isDraft) return finish({ number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA, status: "blocked", reason: "PR 当前为 Draft，未执行 L2。", startedAt }, options);
   const mergeRef = fetchMergeRef(repoRoot, options, pr);
   if (!mergeRef) return finish({ number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA, status: "blocked", reason: "GitHub 未生成 merge ref；PR 与当前 main 冲突或暂不可合并。", startedAt }, options);
-  if (options.dryRun) return finish({ number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA, status: "not-applicable", reason: "dry-run：尚未执行。", startedAt }, options);
   const worktree = prepareWorktree(repoRoot, options, pr, mergeRef);
   const logPath = path.join(options.stateDir, "logs", `pr-${pr.number}.log`);
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
@@ -171,8 +181,16 @@ async function auditPR(repoRoot, options, pr, gateSHA) {
   };
   let result;
   try {
-    overlayGate(repoRoot, worktree);
+    overlayGate(repoRoot, worktree, gateSHA);
     const preflight = preflightGate(worktree);
+    if (options.dryRun) {
+      return {
+        number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA,
+        status: preflight.code === 0 ? "not-applicable" : "failed",
+        reason: preflight.code === 0 ? "dry-run：静态范围分类通过，未执行完整 L2。" : "dry-run：静态范围分类失败，未执行完整 L2。",
+        summary: preflight.output.trim().slice(-6000), startedAt, finishedAt: new Date().toISOString(), executed: false,
+      };
+    }
     if (preflight.noService) {
       result = { number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA,
         status: "not-applicable", reason: "该 PR 不包含单 Service 实现改动，L2 不适用。",

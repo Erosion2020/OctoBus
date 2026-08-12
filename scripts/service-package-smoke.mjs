@@ -135,7 +135,7 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
     result.response_summary = summarizeBody(body);
     result.mock_hits = mock.hitCount - beforeHits;
     result.business_success = response.status >= 200 && response.status < 300;
-    result.chain_ok = isAcceptableConnectResult(response.status, body);
+    result.chain_ok = result.mock_hits > 0 && isAcceptableConnectResult(response.status, body);
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
     result.mock_hits = mock.hitCount - beforeHits;

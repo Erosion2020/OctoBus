@@ -47,6 +47,6 @@ node scripts/service-l2-batch.mjs --concurrency 3 --publish
 - `--force`：忽略相同 head/gate 的本地结果并重跑。
 - `--keep-worktrees`：保留 PR worktree，用于调试。
 - `--exclude <number>`：额外排除 PR。
-- `--dry-run`：只获取和分类，不执行门禁。
+- `--dry-run`：只获取和分类，不执行门禁，也不读写正式结果缓存。
 
 建议先执行 2–3 个代表性 PR 校准资源和评论格式，再运行全量并发布。测试阶段和发布阶段分开，避免脚本错误向 90+ 个 PR 批量写入错误结果。

@@ -88,7 +88,7 @@ export function plannedCommands(serviceDirs, { skipSmoke = false, skipInstall = 
   if (!skipInstall) commands.push(["npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], "services"]);
   for (const serviceDir of serviceDirs) {
     commands.push(["node", ["scripts/validate-service-package.mjs", "--service-dir", serviceDir], "services"]);
-    commands.push(["node", ["scripts/run-tests.mjs", "--service-dir", serviceDir, "--coverage"], "services"]);
+    commands.push(["node", ["scripts/run-tests.mjs", "--service-dir", serviceDir, "--coverage", "--coverage-threshold=80"], "services"]);
   }
   commands.push(["npm", ["run", "pack:check"], "services"]);
   if (!skipSmoke) {

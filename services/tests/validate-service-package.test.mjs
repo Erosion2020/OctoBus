@@ -546,9 +546,9 @@ test("builds test runner args for root and service tests", () => {
   assert.deepEqual(args, [
     "--test",
     "--experimental-test-coverage",
-    "--test-coverage-branches=80",
-    "--test-coverage-functions=80",
-    "--test-coverage-lines=80",
+    "--test-coverage-branches=90",
+    "--test-coverage-functions=90",
+    "--test-coverage-lines=90",
     "--test-coverage-include=vendor__svc/src/**/*.js",
     "--test-coverage-exclude=vendor__svc/node_modules/**",
     path.join("vendor__svc", "test", "svc.test.js"),

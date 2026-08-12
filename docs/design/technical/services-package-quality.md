@@ -165,7 +165,7 @@ npm test -- --service-dir <service-dir>
 npm test -- --coverage --service-dir <service-dir>
 ```
 
-coverage 模式默认要求 branch、function 和 line 都达到 80%。该门禁用于高风险服务、实质改动服务
+coverage 模式默认要求 branch、function 和 line 都达到 90%。PR L2 门禁会显式使用 80%。该门禁用于高风险服务、实质改动服务
 和阶段性质量抽样；全量 service package 的基础门禁仍是 validate/test/pack check。
 
 ## Package 内容门禁

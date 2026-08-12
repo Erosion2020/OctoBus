@@ -58,6 +58,7 @@ function resultPath(options, number) { return path.join(options.stateDir, "resul
 export function readCached(options, pr, gateSHA) {
   if (options.dryRun || options.force || !fs.existsSync(resultPath(options, pr.number))) return null;
   const cached = JSON.parse(fs.readFileSync(resultPath(options, pr.number), "utf8"));
+  if (cached.status === "blocked") return null;
   return cached.headSHA === pr.headRefOid && cached.gateSHA === gateSHA ? cached : null;
 }
 

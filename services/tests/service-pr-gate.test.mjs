@@ -59,6 +59,13 @@ test("does not apply L2 service checks to a core-only PR", () => {
   assert.equal(result.touchesCore, true);
 });
 
+test("does not enforce service package pollution rules on a non-service PR", () => {
+  const root = repoFixture();
+  const result = classifyChanges(["docs/architecture.png", "artifacts/debug.log"], root);
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.serviceDirs, []);
+});
+
 test("plans focused validation, coverage, packaging, build, and smoke", () => {
   const commands = plannedCommands(["vendor__product_v1"]);
   assert.deepEqual(commands.map(([command, args]) => `${command} ${args.join(" ")}`), [

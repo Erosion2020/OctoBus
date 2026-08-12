@@ -44,6 +44,7 @@ function requiredValue(argv, index, flag) {
 
 export function classifyChanges(files, repoRoot) {
   const errors = [];
+  const forbiddenFiles = [];
   const serviceDirs = new Set();
   let touchesCore = false;
   let touchesServiceInfrastructure = false;
@@ -51,7 +52,7 @@ export function classifyChanges(files, repoRoot) {
   for (const file of files) {
     const normalized = file.replaceAll(path.win32.sep, "/");
     if (FORBIDDEN_FILE_RE.test(normalized)) {
-      errors.push(`forbidden generated, binary, evidence, or secret-like file: ${normalized}`);
+      forbiddenFiles.push(normalized);
     }
     if (CORE_PREFIXES.some((prefix) => normalized.startsWith(prefix))) touchesCore = true;
     if (!normalized.startsWith("services/")) continue;
@@ -68,6 +69,11 @@ export function classifyChanges(files, repoRoot) {
 
   if (serviceDirs.size > 1) {
     errors.push(`service PR must change exactly one service root; found: ${[...serviceDirs].sort().join(", ")}`);
+  }
+  if (serviceDirs.size > 0) {
+    for (const file of forbiddenFiles) {
+      errors.push(`forbidden generated, binary, evidence, or secret-like file: ${file}`);
+    }
   }
   if (serviceDirs.size > 0 && touchesCore) {
     errors.push("service PR must not mix a service implementation with runtime, SDK, examples, tests, npm, or Docker changes");

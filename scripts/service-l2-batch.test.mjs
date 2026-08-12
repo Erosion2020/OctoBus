@@ -17,6 +17,18 @@ test("dry-run never reuses or accepts the formal result cache", () => {
   assert.equal(readCached({ ...options, dryRun: true }, pr, "gate"), null);
 });
 
+test("blocked results are retried because draft and mergeability can change", () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "octobus-l2-cache-"));
+  const options = { stateDir, dryRun: false, force: false };
+  const pr = { number: 1, headRefOid: "head" };
+  const resultDir = path.join(stateDir, "results");
+  fs.mkdirSync(resultDir, { recursive: true });
+  fs.writeFileSync(path.join(resultDir, "1.json"), JSON.stringify({
+    headSHA: "head", gateSHA: "gate", status: "blocked",
+  }));
+  assert.equal(readCached(options, pr, "gate"), null);
+});
+
 test("dependency lock reclaims a lock owned by a dead process", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "octobus-l2-lock-"));
   const lockPath = path.join(dir, "pool.lock");

@@ -66,7 +66,7 @@ test("plans focused validation, coverage, packaging, build, and smoke", () => {
     "node scripts/validate-service-package.mjs --service-dir vendor__product_v1",
     "node scripts/run-tests.mjs --service-dir vendor__product_v1 --coverage --coverage-threshold=80",
     "npm run pack:check",
-    "task build",
+    "bash ./scripts/build-octobus.sh bin/octobus",
     "node scripts/service-package-smoke.mjs --service-dir vendor__product_v1 --fail-fast",
   ]);
 });
@@ -74,7 +74,7 @@ test("plans focused validation, coverage, packaging, build, and smoke", () => {
 test("can reuse a prepared dependency pool", () => {
   const commands = plannedCommands(["vendor__product_v1"], { skipInstall: true, skipSmoke: true });
   assert.equal(commands.some(([command, args]) => command === "npm" && args[0] === "install"), false);
-  assert.equal(commands.some(([command, args]) => command === "task" && args[0] === "build"), false);
+  assert.equal(commands.some(([command, args]) => command === "bash" && args[0] === "./scripts/build-octobus.sh"), false);
 });
 
 test("parses CI and local execution options", () => {

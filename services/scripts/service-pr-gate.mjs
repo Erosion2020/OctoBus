@@ -92,7 +92,7 @@ export function plannedCommands(serviceDirs, { skipSmoke = false, skipInstall = 
   }
   commands.push(["npm", ["run", "pack:check"], "services"]);
   if (!skipSmoke) {
-    commands.push(["task", ["build"], "."]);
+    commands.push(["bash", ["./scripts/build-octobus.sh", "bin/octobus"], "."]);
     for (const serviceDir of serviceDirs) {
       commands.push(["node", ["scripts/service-package-smoke.mjs", "--service-dir", serviceDir, "--fail-fast"], "."]);
     }

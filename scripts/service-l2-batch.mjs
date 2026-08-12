@@ -12,6 +12,8 @@ const LABELS = {
   "not-applicable": { name: "l2:not-applicable", color: "6e7781", description: "不适用 Service L2 门禁" },
 };
 const MARKER = "<!-- octobus-service-l2-batch -->";
+const LOCK_STALE_MS = 30 * 60 * 1000;
+const LOCK_WAIT_MS = 35 * 60 * 1000;
 
 function parseArgs(argv) {
   const options = {
@@ -100,15 +102,48 @@ function dependencyFingerprint(worktree) {
   return hash.digest("hex").slice(0, 20);
 }
 
-function withLock(lockPath, action) {
+function processIsAlive(pid) {
+  if (!Number.isInteger(pid) || pid < 1) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return error.code === "EPERM"; }
+}
+
+function lockIsStale(lockPath, staleMs, now) {
+  try {
+    const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+    return now - lock.createdAt > staleMs || !processIsAlive(lock.pid);
+  } catch {
+    return now - fs.statSync(lockPath).mtimeMs > staleMs;
+  }
+}
+
+export function withLock(lockPath, action, { staleMs = LOCK_STALE_MS, waitMs = LOCK_WAIT_MS } = {}) {
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+  const startedAt = Date.now();
+  let fd;
   for (;;) {
     try {
-      const fd = fs.openSync(lockPath, "wx");
-      try { return action(); } finally { fs.closeSync(fd); fs.unlinkSync(lockPath); }
+      fd = fs.openSync(lockPath, "wx");
+      break;
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
+      if (lockIsStale(lockPath, staleMs, Date.now())) {
+        try { fs.unlinkSync(lockPath); } catch (unlinkError) { if (unlinkError.code !== "ENOENT") throw unlinkError; }
+        continue;
+      }
+      if (Date.now() - startedAt >= waitMs) throw new Error(`timed out waiting for dependency lock: ${lockPath}`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    }
+  }
+  const owner = { pid: process.pid, createdAt: Date.now(), token: crypto.randomUUID() };
+  fs.writeFileSync(fd, JSON.stringify(owner));
+  try { return action(); } finally {
+    fs.closeSync(fd);
+    try {
+      const current = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+      if (current.token === owner.token) fs.unlinkSync(lockPath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
     }
   }
 }
@@ -117,14 +152,18 @@ function attachDependencyPool(worktree, options, env) {
   const fingerprint = dependencyFingerprint(worktree);
   const pool = path.join(options.stateDir, "dependency-pool", fingerprint);
   const modules = path.join(pool, "node_modules");
+  const complete = path.join(pool, ".install-complete");
   withLock(`${pool}.lock`, () => {
-    if (!fs.existsSync(modules)) {
+    if (!fs.existsSync(modules) || !fs.existsSync(complete)) {
+      fs.rmSync(modules, { recursive: true, force: true });
+      fs.rmSync(complete, { force: true });
       fs.mkdirSync(pool, { recursive: true });
       for (const file of ["package.json", "package-lock.json", "npm-shrinkwrap.json"]) {
         const source = path.join(worktree, "services", file);
         if (fs.existsSync(source)) fs.copyFileSync(source, path.join(pool, file));
       }
       run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: pool, env });
+      fs.writeFileSync(complete, `${fingerprint}\n`);
     }
   });
   const target = path.join(worktree, "services", "node_modules");
@@ -195,12 +234,6 @@ async function auditPR(repoRoot, options, pr, gateSHA) {
       result = { number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA,
         status: "not-applicable", reason: "该 PR 不包含单 Service 实现改动，L2 不适用。",
         summary: "service gate: no service implementation changed; L2 service checks are not applicable", startedAt };
-      return finish(result, options);
-    }
-    if (preflight.code !== 0) {
-      result = { number: pr.number, title: pr.title, headSHA: pr.headRefOid, gateSHA,
-        status: "failed", reason: "L2 静态范围或包结构预检失败。",
-        summary: preflight.output.split(/\r?\n/).filter((line) => line.startsWith("error:")).slice(-30).join("\n").slice(0, 6000), startedAt };
       return finish(result, options);
     }
     const fingerprint = attachDependencyPool(worktree, options, env);

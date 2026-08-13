@@ -3,6 +3,7 @@ import { gzipSync } from 'node:zlib';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 const DEFAULT_TIMEOUT_MS = 15000;
+let insecureDispatcherPromise;
 
 const PKG = 'QIANXIN_TianYan_Platform';
 const P = `/${PKG}.${PKG}/`;
@@ -95,13 +96,14 @@ const checkApiError = (json) => {
 
 export function rpcdef(ctx) {
   const bindings = mergedBindings(ctx);
-  const timeoutMs = ctx.limits?.timeoutMs || DEFAULT_TIMEOUT_MS;
+  const configuredTimeout = Number(ctx.limits?.timeoutMs);
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : DEFAULT_TIMEOUT_MS;
   const skipTls = Boolean(
     bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify ||
     bindings.skip_tls_verify || bindings.tls_insecure_skip_verify,
   );
-
-  const tlsOpts = () => (skipTls ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {});
 
   const baseUrl = () => {
     const u = normalizeBaseUrl(firstDefined(
@@ -113,10 +115,26 @@ export function rpcdef(ctx) {
   };
 
   const doFetch = async (url, init) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(url, { ...init, timeoutMs, ...tlsOpts() });
+      const dispatcher = skipTls
+        ? await (insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+          connect: { rejectUnauthorized: false },
+        })))
+        : undefined;
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        ...(dispatcher ? { dispatcher } : {}),
+      });
     } catch (e) {
-      throw err('UNAVAILABLE', e?.cause?.message || e?.message || 'fetch failed');
+      const message = e?.name === 'AbortError' || controller.signal.aborted
+        ? 'upstream request timed out'
+        : 'upstream request failed';
+      throw err('UNAVAILABLE', message);
+    } finally {
+      clearTimeout(timer);
     }
   };
 
@@ -124,9 +142,9 @@ export function rpcdef(ctx) {
     const text = await res.text();
     if (!res.ok) {
       const s = res.status;
-      if (s === 401 || s === 403) throw err('PERMISSION_DENIED', `http ${s}: ${text}`);
-      if (s >= 400 && s < 500) throw err('FAILED_PRECONDITION', `http ${s}: ${text}`);
-      throw err('UNAVAILABLE', `http ${s}: ${text}`);
+      if (s === 401 || s === 403) throw err('PERMISSION_DENIED', `upstream http ${s}`);
+      if (s >= 400 && s < 500) throw err('FAILED_PRECONDITION', `upstream http ${s}`);
+      throw err('UNAVAILABLE', `upstream http ${s}`);
     }
     if (!text.trim()) throw err('UNKNOWN', 'empty response body');
     try { return JSON.parse(text); } catch { throw err('UNKNOWN', 'response is not valid JSON'); }

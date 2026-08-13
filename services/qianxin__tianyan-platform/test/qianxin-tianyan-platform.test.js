@@ -979,11 +979,18 @@ describe('GetCompromisedHostStatus validation errors', () => {
 describe('TLS skip verify', () => {
   afterEach(() => { globalThis.fetch = originalFetch; });
 
-  it('tlsInsecureSkipVerify: true still calls fetch', async () => {
-    globalThis.fetch = makeSeqFetch({ data: { items: [], total: 0 } });
+  it('tlsInsecureSkipVerify: true uses an undici dispatcher', async () => {
+    let capturedInit;
+    const seqFetch = makeSeqFetch({ data: { items: [], total: 0 } });
+    globalThis.fetch = async (url, init) => {
+      capturedInit = init;
+      return seqFetch(url, init);
+    };
     const ctx = buildCtx({ bindings: { restBaseUrl: 'https://tianyan.example.com', tlsInsecureSkipVerify: true }, req: { offset: 1, limit: 5 } });
     const r = await rpcdef(ctx)[PATH_LIST_ALARMS]();
     assert.equal(r.total, 0);
+    assert.ok(capturedInit.dispatcher);
+    assert.equal(Object.hasOwn(capturedInit, 'insecureSkipVerify'), false);
   });
 
   it('skip_tls_verify alias works', async () => {
@@ -1026,6 +1033,28 @@ describe('timeoutMs', () => {
     const ctx = buildCtx({ limits: { timeoutMs: 0 }, req: { offset: 1, limit: 5 } });
     const r = await rpcdef(ctx)[PATH_LIST_ALARMS]();
     assert.equal(r.total, 0);
+  });
+
+  it('aborts a request after the configured timeout', async () => {
+    globalThis.fetch = async (_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        const error = new Error('aborted');
+        error.name = 'AbortError';
+        reject(error);
+      }, { once: true });
+    });
+    const ctx = buildCtx({ limits: { timeoutMs: 5 }, req: { offset: 1, limit: 5 } });
+    await assert.rejects(rpcdef(ctx)[PATH_LIST_ALARMS](), /UNAVAILABLE: upstream request timed out/);
+  });
+});
+
+test('HTTP errors do not expose the upstream response body', async () => {
+  globalThis.fetch = makeSeqFetch('secret internal diagnostic', 500);
+  const ctx = buildCtx({ req: { offset: 1, limit: 10 } });
+  await assert.rejects(rpcdef(ctx)[PATH_LIST_ALARMS](), (error) => {
+    assert.match(error.message, /UNAVAILABLE: upstream http 500/);
+    assert.doesNotMatch(error.message, /secret internal diagnostic/);
+    return true;
   });
 });
 

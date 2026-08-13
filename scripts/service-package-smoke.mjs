@@ -468,10 +468,19 @@ function numberSample(name, schema) {
     return 443;
   }
   const min = schema.minimum ?? schema.exclusiveMinimum;
-  if (typeof min === "number") {
-    return min + (schema.exclusiveMinimum !== undefined ? 1 : 0);
+  const lowerBound = typeof min === "number"
+    ? min + (schema.exclusiveMinimum !== undefined ? 1 : 0)
+    : 1;
+  const maximum = schema.maximum ?? schema.exclusiveMaximum;
+  const upper = typeof maximum === "number"
+    ? maximum - (schema.exclusiveMaximum !== undefined ? 1 : 0)
+    : Number.POSITIVE_INFINITY;
+  const base = Math.min(lowerBound, upper);
+  const isEndTime = /^(end|to)(?:time|_time|timestamp|_timestamp|ts|_ts|date|_date)(?:_ms)?$/.test(lower);
+  if (isEndTime) {
+    return Math.min(base + 1, upper);
   }
-  return 1;
+  return base;
 }
 
 function booleanSample(name) {

@@ -189,6 +189,10 @@ const services = {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
     serviceModule: "../sangfor__fw_v8-0-45/src/service.js",
   },
+  "sangfor-sip": {
+    entryFile: "../sangfor__sip/bin/sangfor-sip.js",
+    serviceModule: "../sangfor__sip/src/service.js",
+  },
   "sangfor-xdr-v2-0-45": {
     entryFile: "../sangfor__xdr_v2-0-45/bin/sangfor-xdr-v2-0-45.js",
     serviceModule: "../sangfor__xdr_v2-0-45/src/service.js",

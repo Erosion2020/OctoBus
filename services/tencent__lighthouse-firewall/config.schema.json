@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "default": "https://lighthouse.tencentcloudapi.com",
+      "description": "Tencent Cloud Lighthouse API endpoint."
+    },
+    "region": {
+      "type": "string",
+      "description": "Default Tencent Cloud region, for example ap-guangzhou. Request region takes precedence.",
+      "default": "ap-guangzhou",
+      "x-octobus-smoke": "ap-guangzhou"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for test endpoints only."
+    }
+  },
+  "required": ["region"]
+}

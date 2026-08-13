@@ -312,6 +312,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "geyecloud-atd": {
+    entryFile: "../geyecloud__atd_v2-3-6/bin/geyecloud-atd.js",
+    serviceModule: "../geyecloud__atd_v2-3-6/src/service.js",
+  },
   "nsfocus-waf-v6-0-7": {
     entryFile: "../nsfocus__waf_v6-0-7/bin/nsfocus-waf-v6-0-7.js",
     serviceModule: "../nsfocus__waf_v6-0-7/src/service.js",

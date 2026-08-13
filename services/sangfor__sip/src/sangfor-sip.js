@@ -89,7 +89,7 @@ const mergedBindings = (ctx = {}) => ({
 });
 
 const normalizeBaseUrl = (url) => {
-  const s = String(url ?? '').trim().replace(/\/+$/, '');
+  const s = String(url && typeof url === 'object' && 'value' in url ? url.value : url ?? '').trim().replace(/\/+$/, '');
   if (!s || !/^https?:\/\//i.test(s)) return null;
   return s;
 };
@@ -118,7 +118,8 @@ export function rpcdef(ctx) {
   const skipTlsVerify = firstDefined(bindings.skipTlsVerify, bindings.skip_tls_verify) === true;
 
   const baseUrl = () => {
-    const u = normalizeBaseUrl(firstDefined(bindings.host, bindings.baseUrl, bindings.restBaseUrl));
+    const candidates = [bindings.host, bindings.baseUrl, bindings.restBaseUrl];
+    const u = candidates.map(normalizeBaseUrl).find(Boolean);
     if (!u) throw err('INVALID_ARGUMENT', 'config.host is required (e.g. https://10.0.0.1:7443)');
     return u;
   };
@@ -147,9 +148,9 @@ export function rpcdef(ctx) {
   };
 
   const getToken = async (base) => {
-    const userName = String(firstDefined(bindings.userName, bindings.username) ?? '').trim();
-    const password = String(firstDefined(bindings.password) ?? '').trim();
-    const platformName = String(firstDefined(bindings.platformName) ?? '').trim();
+    const userName = unwrap(firstDefined(bindings.userName, bindings.username))?.trim() ?? '';
+    const password = unwrap(bindings.password)?.trim() ?? '';
+    const platformName = unwrap(bindings.platformName)?.trim() ?? '';
 
     if (!userName) throw err('INVALID_ARGUMENT', 'secret.userName is required');
     if (!password) throw err('INVALID_ARGUMENT', 'secret.password is required');
@@ -177,19 +178,19 @@ export function rpcdef(ctx) {
   const pullData = async (apiPath, req) => {
     const base = baseUrl();
 
-    const fromTime = toInt(firstDefined(req?.from_time));
-    const toTime = toInt(firstDefined(req?.to_time));
+    const fromTime = toInt(firstDefined(req?.from_time, req?.fromTime));
+    const toTime = toInt(firstDefined(req?.to_time, req?.toTime));
 
     if (fromTime === null) throw err('INVALID_ARGUMENT', 'from_time is required');
     if (toTime === null) throw err('INVALID_ARGUMENT', 'to_time is required');
-    if (fromTime >= toTime) throw err('INVALID_ARGUMENT', 'from_time must be less than to_time');
 
-    const maxCount = toInt(firstDefined(req?.max_count)) ?? 2000;
+    const maxCount = toInt(firstDefined(req?.max_count, req?.maxCount)) ?? 2000;
     if (maxCount < 1 || maxCount > MAX_COUNT) {
       throw err('INVALID_ARGUMENT', `max_count must be in [1, ${MAX_COUNT}]`);
     }
 
     const token = await getToken(base);
+    if (fromTime >= toTime) throw err('INVALID_ARGUMENT', 'from_time must be less than to_time');
 
     const params = new URLSearchParams({ token, fromActionTime: String(fromTime), toActionTime: String(toTime), maxCount: String(maxCount) });
     const res = await doFetch(`${base}${apiPath}?${params.toString()}`);

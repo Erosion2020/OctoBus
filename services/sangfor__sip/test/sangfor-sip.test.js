@@ -227,6 +227,28 @@ describe('GetSecurityEvents success', () => {
     assert.ok(capturedUrl.includes('maxCount=500'), `expected maxCount=500 in ${capturedUrl}`);
   });
 
+  it('accepts proto camelCase request fields and wrapped bindings', async () => {
+    let dataUrl;
+    globalThis.fetch = makeSeqFetch({ code: 0, data: { items: [], count: 0 } });
+    const ctx = buildCtx({
+      from_time: undefined,
+      to_time: undefined,
+      fromTime: 1700000000,
+      toTime: 1700003600,
+      maxCount: 25,
+    });
+    ctx.bindings.host = { value: 'https://sip.example.com:7443/' };
+    let callNum = 0;
+    const seq = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      callNum++;
+      if (callNum === 2) dataUrl = url;
+      return seq(url, init);
+    };
+    await rpcdef(ctx)[PATH_GET_SECURITY_EVENTS]();
+    assert.match(dataUrl, /maxCount=25/);
+  });
+
   it('sends token in query string', async () => {
     let dataUrl;
     let callNum = 0;

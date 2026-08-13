@@ -1,14 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
+  "required": ["host"],
   "additionalProperties": true,
   "properties": {
     "host": {
       "type": "string",
+      "format": "uri",
       "description": "Sangfor SIP base URL, e.g. https://10.0.0.1:7443"
     },
     "baseUrl": {
       "type": "string",
+      "format": "uri",
       "description": "Alias for host."
     },
     "timeoutMs": {

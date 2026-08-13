@@ -213,6 +213,7 @@
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",
+    "pr:gate": "node scripts/service-pr-gate.mjs",
     "test": "node scripts/run-tests.mjs",
     "coverage:all": "node scripts/run-coverage-all.mjs",
     "import:check": "node scripts/import-check-all.mjs",

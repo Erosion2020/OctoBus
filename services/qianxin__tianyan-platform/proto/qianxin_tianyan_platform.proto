@@ -134,8 +134,11 @@ message AddFlowWhitelistRequest {
   google.protobuf.StringValue ioc = 3;
   google.protobuf.StringValue threat_name = 4;
   google.protobuf.StringValue type_chain = 5;
-  google.protobuf.Int64Value end_time = 6;
-  google.protobuf.Int64Value start_time = 7;
+  // Epoch milliseconds encoded as decimal strings. StringValue keeps the
+  // Connect JSON representation portable across JavaScript clients, where
+  // protobuf int64 values cannot be represented safely as JSON numbers.
+  google.protobuf.StringValue end_time = 6;
+  google.protobuf.StringValue start_time = 7;
 }
 
 message AddFlowWhitelistResponse {

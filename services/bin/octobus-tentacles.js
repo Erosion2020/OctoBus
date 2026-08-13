@@ -13,6 +13,10 @@ const services = {
     entryFile: "../alibaba-cloud__simple-application-server-firewall/bin/alibaba-cloud-simple-application-server-firewall.js",
     serviceModule: "../alibaba-cloud__simple-application-server-firewall/src/service.js",
   },
+  "aliyun-cloudfw": {
+    entryFile: "../aliyun__cloudfw/bin/aliyun-cloudfw.js",
+    serviceModule: "../aliyun__cloudfw/src/service.js",
+  },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
     serviceModule: "../chaitin__safeline-waf/src/service.js",

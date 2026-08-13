@@ -153,6 +153,10 @@ const services = {
     entryFile: "../qianxin__fw-secgate3600/bin/qianxin-fw-secgate3600.js",
     serviceModule: "../qianxin__fw-secgate3600/src/service.js",
   },
+  "qianxin-tianyan-platform": {
+    entryFile: "../qianxin__tianyan-platform/bin/qianxin-tianyan-platform.js",
+    serviceModule: "../qianxin__tianyan-platform/src/service.js",
+  },
   "qianxin-fw-secgate3600-http-x": {
     entryFile: "../qianxin__fw-secgate3600-http-x/bin/qianxin-fw-secgate3600-http-x.js",
     serviceModule: "../qianxin__fw-secgate3600-http-x/src/service.js",

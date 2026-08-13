@@ -5,9 +5,17 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "aliyun-waf3": {
+    entryFile: "../aliyun__waf3/bin/aliyun-waf3.js",
+    serviceModule: "../aliyun__waf3/src/service.js",
+  },
   "alibaba-cloud-simple-application-server-firewall": {
     entryFile: "../alibaba-cloud__simple-application-server-firewall/bin/alibaba-cloud-simple-application-server-firewall.js",
     serviceModule: "../alibaba-cloud__simple-application-server-firewall/src/service.js",
+  },
+  "aliyun-cloudfw": {
+    entryFile: "../aliyun__cloudfw/bin/aliyun-cloudfw.js",
+    serviceModule: "../aliyun__cloudfw/src/service.js",
   },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
@@ -113,6 +121,10 @@ const services = {
     entryFile: "../imperva__waf-gateway_v13-6-90/bin/imperva-waf-gateway-v13-6-90.js",
     serviceModule: "../imperva__waf-gateway_v13-6-90/src/service.js",
   },
+  "m01-intelligence": {
+    entryFile: "../m01__intelligence/bin/m01-intelligence.js",
+    serviceModule: "../m01__intelligence/src/service.js",
+  },
   "nsfocus-ads-v4-5-r90-f06": {
     entryFile: "../nsfocus__ads_v4-5-r90-f06/bin/nsfocus-ads-v4-5-r90-f06.js",
     serviceModule: "../nsfocus__ads_v4-5-r90-f06/src/service.js",
@@ -160,6 +172,10 @@ const services = {
   "ray-waf-v6-1-2": {
     entryFile: "../ray__waf_v6-1-2/bin/ray-waf-v6-1-2.js",
     serviceModule: "../ray__waf_v6-1-2/src/service.js",
+  },
+  "riversec-waf-26-03": {
+    entryFile: "../riversec__waf_26-03/bin/riversec-waf-26-03.js",
+    serviceModule: "../riversec__waf_26-03/src/service.js",
   },
   "riversafe-waf": {
     entryFile: "../riversafe__waf/bin/riversafe-waf.js",

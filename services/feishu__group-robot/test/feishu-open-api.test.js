@@ -35,6 +35,16 @@ const context = (responses, req = {}, calls = []) => ({
 
 test.beforeEach(() => _test.tokenCache.clear());
 
+test('recognizes runtime timeout shapes and sanitizes upstream messages', () => {
+  assert.equal(_test.isTimeoutError({ name: 'TimeoutError' }), true);
+  assert.equal(_test.isTimeoutError({ name: 'AbortError', cause: { name: 'TimeoutError' } }), true);
+  assert.equal(_test.isTimeoutError(new Error('network failed')), false);
+  assert.equal(
+    _test.sanitizeUpstreamMessage('authorization: Bearer-secret token=tenant-secret'),
+    'authorization=*** token=***',
+  );
+});
+
 test('keeps legacy group robot method while registering Open Platform methods', () => {
   assert.ok(service);
   assert.equal(typeof service, 'object');

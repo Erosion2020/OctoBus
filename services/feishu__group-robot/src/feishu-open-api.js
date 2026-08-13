@@ -53,6 +53,15 @@ const errorWithCode = (code, message) => {
   return error;
 };
 
+const sanitizeUpstreamMessage = (value) => asString(value)
+  .replace(/(tenant_access_token|app_secret|authorization|token)\s*[:=]\s*[^\s,;]+/gi, '$1=***')
+  .slice(0, 240);
+
+const isTimeoutError = (cause) => cause?.name === 'TimeoutError'
+  || cause?.name === 'AbortError'
+  || cause?.cause?.name === 'TimeoutError'
+  || cause?.code === 'ABORT_ERR';
+
 const asString = (value) => String(value ?? '').trim();
 const tokenCacheKey = (settings) => {
   const secretFingerprint = createHash('sha256').update(settings.appSecret).digest('hex');
@@ -163,9 +172,9 @@ const parseResponse = async (response) => {
     throw errorWithCode('UNKNOWN', 'Feishu response is missing a numeric code');
   }
   if (!response.ok || !Number.isFinite(upstreamCode) || upstreamCode !== 0) {
-    const message = asString(payload?.msg ?? payload?.message)
+    const message = sanitizeUpstreamMessage(payload?.msg ?? payload?.message)
       || `Feishu request failed with HTTP ${response.status}`;
-    throw errorWithCode(mapErrorCode(response.status, upstreamCode), message.slice(0, 240));
+    throw errorWithCode(mapErrorCode(response.status, upstreamCode), message);
   }
   return payload;
 };
@@ -180,7 +189,7 @@ const fetchOnce = async (settings, path, options, mutation) => {
       signal: controller.signal,
     });
   } catch (cause) {
-    const timedOut = cause?.name === 'AbortError';
+    const timedOut = isTimeoutError(cause);
     const reason = timedOut ? 'request timed out' : 'network request failed';
     const error = errorWithCode(
       timedOut ? 'DEADLINE_EXCEEDED' : 'UNAVAILABLE',
@@ -496,4 +505,6 @@ export const _test = {
   resolveSettings,
   tokenCacheKey,
   tokenCache,
+  isTimeoutError,
+  sanitizeUpstreamMessage,
 };

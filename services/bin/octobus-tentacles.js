@@ -316,6 +316,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "tencent-qq-chat": {
+    entryFile: "../tencent__qq-chat/bin/tencent-qq-chat.js",
+    serviceModule: "../tencent__qq-chat/src/service.js",
+  },
   "geyecloud-atd": {
     entryFile: "../geyecloud__atd_v2-3-6/bin/geyecloud-atd.js",
     serviceModule: "../geyecloud__atd_v2-3-6/src/service.js",

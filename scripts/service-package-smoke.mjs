@@ -467,17 +467,23 @@ function numberSample(name, schema) {
   if (lower.includes("port")) {
     return 443;
   }
-  if (lower.includes("endtime") || lower.includes("totime") || lower.startsWith("end_") || lower.startsWith("to_")) {
-    return 2;
-  }
-  if (lower.includes("starttime") || lower.includes("fromtime") || lower.startsWith("start_") || lower.startsWith("from_")) {
-    return 1;
-  }
   const min = schema.minimum ?? schema.exclusiveMinimum;
-  if (typeof min === "number") {
-    return min + (schema.exclusiveMinimum !== undefined ? 1 : 0);
+  const base = typeof min === "number"
+    ? min + (schema.exclusiveMinimum !== undefined ? 1 : 0)
+    : 1;
+  const isStartTime = /^(starttime|start_time|fromtime|from_time)$/.test(lower);
+  const isEndTime = /^(endtime|end_time|totime|to_time)$/.test(lower);
+  if (isEndTime) {
+    const maximum = schema.maximum ?? schema.exclusiveMaximum;
+    const upper = typeof maximum === "number"
+      ? maximum - (schema.exclusiveMaximum !== undefined ? 1 : 0)
+      : Number.POSITIVE_INFINITY;
+    return Math.min(base + 1, upper);
   }
-  return 1;
+  if (isStartTime || typeof min === "number") {
+    return base;
+  }
+  return base;
 }
 
 function booleanSample(name) {

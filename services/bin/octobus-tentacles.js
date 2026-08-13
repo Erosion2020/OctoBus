@@ -172,6 +172,10 @@ const services = {
     entryFile: "../qianxin__hunter_v23-1/bin/qianxin-hunter.js",
     serviceModule: "../qianxin__hunter_v23-1/src/service.js",
   },
+  "qianxin-vs-secvss3600": {
+    entryFile: "../qianxin__vs-secvss3600/bin/qianxin-vs-secvss3600.js",
+    serviceModule: "../qianxin__vs-secvss3600/src/service.js",
+  },
   "qiming-tianqing-waf": {
     entryFile: "../qiming-tianqing__waf/bin/qiming-tianqing-waf.js",
     serviceModule: "../qiming-tianqing__waf/src/service.js",

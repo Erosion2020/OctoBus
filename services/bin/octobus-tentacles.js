@@ -308,6 +308,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "zhizhangyi-mbs": {
+    entryFile: "../zhizhangyi__mbs/bin/zhizhangyi-mbs.js",
+    serviceModule: "../zhizhangyi__mbs/src/service.js",
+  },
   "qianxin-caasm": {
     entryFile: "../qianxin__caasm_v1/bin/qianxin-caasm.js",
     serviceModule: "../qianxin__caasm_v1/src/service.js",

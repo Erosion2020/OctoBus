@@ -80,6 +80,7 @@
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
     "wd-k01": "bin/wd-k01.js",
     "opencti": "bin/opencti.js",
+    "zhizhangyi-mbs": "bin/zhizhangyi-mbs.js",
     "qianxin-caasm": "bin/qianxin-caasm.js",
     "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js"
   },
@@ -239,7 +240,9 @@
     "scripts",
     "aliyun__waf3",
     "ailpha__platform",
-    "bin/octobus-tentacles.js"
+    "bin/octobus-tentacles.js",
+    "bin/zhizhangyi-mbs.js",
+    "zhizhangyi__mbs"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

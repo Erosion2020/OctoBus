@@ -49,6 +49,15 @@ const errorWithCode = (code, message) => {
   return err;
 };
 
+const isTimeoutError = (err) => {
+  const seen = new Set();
+  for (let current = err; current && !seen.has(current); current = current.cause) {
+    seen.add(current);
+    if (current.name === 'TimeoutError' || current.code === 'UND_ERR_CONNECT_TIMEOUT') return true;
+  }
+  return false;
+};
+
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 const firstDefined = (...vals) => vals.find((v) => v !== undefined && v !== null);
 
@@ -217,11 +226,10 @@ export function rpcdef(ctx) {
         ...tlsOptions(),
       });
     } catch (e) {
-      if (e?.name === 'TimeoutError') {
+      if (isTimeoutError(e)) {
         throw errorWithCode('DEADLINE_EXCEEDED', `request timed out after ${timeoutMs}ms`);
       }
-      const reason = e?.cause?.message || e?.message || 'fetch failed';
-      throw errorWithCode('UNAVAILABLE', reason);
+      throw errorWithCode('UNAVAILABLE', 'upstream request failed');
     }
 
     const text = await res.text();
@@ -232,7 +240,7 @@ export function rpcdef(ctx) {
       else if (res.status === 404) code = 'NOT_FOUND';
       else if (res.status >= 400 && res.status < 500) code = 'FAILED_PRECONDITION';
       else code = 'UNAVAILABLE';
-      const err = errorWithCode(code, `upstream http ${res.status}: ${text}`);
+      const err = errorWithCode(code, `upstream returned HTTP ${res.status}`);
       err.httpStatus = res.status;
       throw err;
     }

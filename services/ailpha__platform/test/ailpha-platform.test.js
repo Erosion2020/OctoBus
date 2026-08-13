@@ -179,7 +179,7 @@ test('UnblockIp deletes and is idempotent on 404', async () => {
 
   // non-404 errors are re-thrown
   setFetch(() => ({ status: 500, raw: 'boom' }));
-  await assert.rejects((await loadRpc({ ids: ['s1'] }))[unblockPath](), /UNAVAILABLE.*http 500/);
+  await assert.rejects((await loadRpc({ ids: ['s1'] }))[unblockPath](), /UNAVAILABLE.*HTTP 500/);
 });
 
 test('auth: missing apiKey errors', async () => {
@@ -196,20 +196,24 @@ test('error mapping: endpoint, 401/403/404/500, network, bad json, empty body', 
     /endpoint\/baseUrl is required/,
   );
 
-  setFetch(() => ({ status: 401, raw: 'no auth' }));
-  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /UNAUTHENTICATED.*http 401/);
+  setFetch(() => ({ status: 401, raw: 'secret token and internal stack' }));
+  await assert.rejects((await loadRpc({}))[listAlarmsPath](), (err) => {
+    assert.match(err.message, /UNAUTHENTICATED.*HTTP 401/);
+    assert.doesNotMatch(err.message, /secret token|internal stack/);
+    return true;
+  });
 
   setFetch(() => ({ status: 403, raw: 'forbidden' }));
-  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /PERMISSION_DENIED.*http 403/);
+  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /PERMISSION_DENIED.*HTTP 403/);
 
   setFetch(() => ({ status: 404, raw: 'nf' }));
-  await assert.rejects((await loadRpc({ agg_condition: 'a', window_id: 'w' }))[detailPath](), /NOT_FOUND.*http 404/);
+  await assert.rejects((await loadRpc({ agg_condition: 'a', window_id: 'w' }))[detailPath](), /NOT_FOUND.*HTTP 404/);
 
   setFetch(() => ({ status: 500, raw: 'boom' }));
-  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /UNAVAILABLE.*http 500/);
+  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /UNAVAILABLE.*HTTP 500/);
 
   setFetch(() => ({ throwNetwork: 'ECONNREFUSED' }));
-  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /UNAVAILABLE.*ECONNREFUSED/);
+  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /UNAVAILABLE.*upstream request failed/);
 
   setFetch(() => ({ status: 200, raw: 'not-json{' }));
   await assert.rejects((await loadRpc({}))[listAlarmsPath](), /UNKNOWN.*not valid JSON/);
@@ -227,8 +231,9 @@ test('timeout uses AbortSignal and maps TimeoutError to DEADLINE_EXCEEDED', asyn
   assert.equal('timeoutMs' in init, false, 'no non-standard timeoutMs option');
 
   setFetch(() => {
-    const e = new Error('The operation was aborted due to timeout');
-    e.name = 'TimeoutError';
+    const e = new Error('The operation was aborted');
+    e.name = 'AbortError';
+    e.cause = new DOMException('The operation timed out', 'TimeoutError');
     throw e;
   });
   await assert.rejects((await loadRpc({}))[listAlarmsPath](), /DEADLINE_EXCEEDED.*timed out after/);

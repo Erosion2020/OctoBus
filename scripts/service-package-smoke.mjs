@@ -467,6 +467,12 @@ function numberSample(name, schema) {
   if (lower.includes("port")) {
     return 443;
   }
+  if (lower.includes("endtime") || lower.includes("totime") || lower.startsWith("end_") || lower.startsWith("to_")) {
+    return 2;
+  }
+  if (lower.includes("starttime") || lower.includes("fromtime") || lower.startsWith("start_") || lower.startsWith("from_")) {
+    return 1;
+  }
   const min = schema.minimum ?? schema.exclusiveMinimum;
   if (typeof min === "number") {
     return min + (schema.exclusiveMinimum !== undefined ? 1 : 0);

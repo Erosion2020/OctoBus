@@ -78,6 +78,7 @@
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
     "wd-k01": "bin/wd-k01.js",
     "opencti": "bin/opencti.js",
+    "qianxin-caasm": "bin/qianxin-caasm.js",
     "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js"
   },
   "files": [
@@ -154,6 +155,7 @@
     "bin/volcengine-cloud-firewall.js",
     "bin/wd-k01.js",
     "bin/opencti.js",
+    "bin/qianxin-caasm.js",
     "bin/wangsu-label-ip.js",
     "bin/anyi-cloud-native-security.js",
     "alibaba-cloud__simple-application-server-firewall",
@@ -224,6 +226,7 @@
     "volcengine__cloud-firewall",
     "wd__k01",
     "filigran__opencti",
+    "qianxin__caasm_v1",
     "fofa__network-space-mapper",
     "wangsu__label-ip",
     "anyi__cloud-native-security",

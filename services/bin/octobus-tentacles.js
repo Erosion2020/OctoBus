@@ -296,6 +296,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "qianxin-caasm": {
+    entryFile: "../qianxin__caasm_v1/bin/qianxin-caasm.js",
+    serviceModule: "../qianxin__caasm_v1/src/service.js",
+  },
   "anyi-cloud-native-security": {
     entryFile: "../anyi__cloud-native-security/bin/anyi-cloud-native-security.js",
     serviceModule: "../anyi__cloud-native-security/src/service.js",

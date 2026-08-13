@@ -1,5 +1,15 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
+
+const DEFAULT_TIMEOUT_MS = 10000;
+const MAX_COUNT = 10000;
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
 
 const PKG = 'SANGFOR_SIP';
 const P = `/${PKG}.${PKG}/`;
@@ -84,6 +94,15 @@ const normalizeBaseUrl = (url) => {
   return s;
 };
 
+const isTimeoutError = (error) => {
+  const seen = new Set();
+  for (let current = error; current && !seen.has(current); current = current.cause) {
+    seen.add(current);
+    if (current.name === 'TimeoutError' || current.code === 'UND_ERR_CONNECT_TIMEOUT') return true;
+  }
+  return false;
+};
+
 export const sipAuth3 = (userName, password, rand) => {
   return createHash('sha1')
     .update(String(rand) + password + 'sangfor3party' + userName)
@@ -92,6 +111,11 @@ export const sipAuth3 = (userName, password, rand) => {
 
 export function rpcdef(ctx) {
   const bindings = mergedBindings(ctx);
+  const configuredTimeout = Number(firstDefined(ctx?.limits?.timeoutMs, bindings.timeoutMs));
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? Math.trunc(configuredTimeout)
+    : DEFAULT_TIMEOUT_MS;
+  const skipTlsVerify = firstDefined(bindings.skipTlsVerify, bindings.skip_tls_verify) === true;
 
   const baseUrl = () => {
     const u = normalizeBaseUrl(firstDefined(bindings.host, bindings.baseUrl, bindings.restBaseUrl));
@@ -101,17 +125,23 @@ export function rpcdef(ctx) {
 
   const doFetch = async (url, init) => {
     try {
-      return await fetch(url, init);
+      return await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(timeoutMs),
+        ...(skipTlsVerify ? { dispatcher: getInsecureTlsDispatcher() } : {}),
+      });
     } catch (e) {
-      throw err('UNAVAILABLE', e?.cause?.message || e?.message || 'fetch failed');
+      if (isTimeoutError(e)) throw err('UNAVAILABLE', `upstream request timed out after ${timeoutMs}ms`);
+      throw err('UNAVAILABLE', 'upstream request failed');
     }
   };
 
   const readJson = async (res) => {
     let text;
     try { text = await res.text(); } catch { throw err('UNKNOWN', 'failed to read response body'); }
-    if (res.status === 403) throw err('PERMISSION_DENIED', `http 403: ${text}`);
-    if (res.status >= 500) throw err('UNAVAILABLE', `http ${res.status}: ${text}`);
+    if (res.status === 401 || res.status === 403) throw err('PERMISSION_DENIED', `upstream returned HTTP ${res.status}`);
+    if (res.status >= 400 && res.status < 500) throw err('FAILED_PRECONDITION', `upstream returned HTTP ${res.status}`);
+    if (res.status >= 500) throw err('UNAVAILABLE', `upstream returned HTTP ${res.status}`);
     if (!text.trim()) throw err('UNKNOWN', 'empty response body');
     try { return JSON.parse(text); } catch { throw err('UNKNOWN', 'response is not valid JSON'); }
   };
@@ -125,7 +155,7 @@ export function rpcdef(ctx) {
     if (!password) throw err('INVALID_ARGUMENT', 'secret.password is required');
     if (!platformName) throw err('INVALID_ARGUMENT', 'secret.platformName is required');
 
-    const rand = Math.floor(Math.random() * 2147483647);
+    const rand = randomInt(0, 2147483647);
     const auth = sipAuth3(userName, password, rand);
 
     const body = JSON.stringify({ rand, userName, clientProduct: '', clientVersion: '', clientId: 0, desc: '', auth, platformName });
@@ -136,8 +166,8 @@ export function rpcdef(ctx) {
     });
 
     const json = await readJson(res);
-    if (json?.code === 13) throw err('PERMISSION_DENIED', json.message ?? 'SIP permission denied');
-    if (json?.code !== 0) throw err('FAILED_PRECONDITION', `SIP auth failed: code=${json?.code} ${json?.message ?? ''}`);
+    if (json?.code === 13) throw err('PERMISSION_DENIED', 'SIP permission denied');
+    if (json?.code !== 0) throw err('FAILED_PRECONDITION', `SIP authentication failed with code ${json?.code ?? 'unknown'}`);
 
     const token = json?.data?.token;
     if (!token) throw err('UNKNOWN', 'SIP auth response missing token');
@@ -146,7 +176,6 @@ export function rpcdef(ctx) {
 
   const pullData = async (apiPath, req) => {
     const base = baseUrl();
-    const token = await getToken(base);
 
     const fromTime = toInt(firstDefined(req?.from_time));
     const toTime = toInt(firstDefined(req?.to_time));
@@ -156,13 +185,18 @@ export function rpcdef(ctx) {
     if (fromTime >= toTime) throw err('INVALID_ARGUMENT', 'from_time must be less than to_time');
 
     const maxCount = toInt(firstDefined(req?.max_count)) ?? 2000;
+    if (maxCount < 1 || maxCount > MAX_COUNT) {
+      throw err('INVALID_ARGUMENT', `max_count must be in [1, ${MAX_COUNT}]`);
+    }
+
+    const token = await getToken(base);
 
     const params = new URLSearchParams({ token, fromActionTime: String(fromTime), toActionTime: String(toTime), maxCount: String(maxCount) });
     const res = await doFetch(`${base}${apiPath}?${params.toString()}`);
     const json = await readJson(res);
 
-    if (json?.code === 13) throw err('PERMISSION_DENIED', json.message ?? 'SIP permission denied');
-    if (json?.code !== 0) throw err('FAILED_PRECONDITION', `SIP error: code=${json?.code} ${json?.message ?? ''}`);
+    if (json?.code === 13) throw err('PERMISSION_DENIED', 'SIP permission denied');
+    if (json?.code !== 0) throw err('FAILED_PRECONDITION', `SIP request failed with code ${json?.code ?? 'unknown'}`);
 
     const items = Array.isArray(json?.data?.items) ? json.data.items : [];
     const count = typeof json?.data?.count === 'number' ? json.data.count : items.length;

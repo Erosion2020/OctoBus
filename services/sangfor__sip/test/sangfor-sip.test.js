@@ -296,6 +296,16 @@ describe('GetSecurityEvents validation', () => {
     const ctx = buildCtx({ from_time: 1700003600, to_time: 1700000000 });
     await expectGrpcError(() => rpcdef(ctx)[PATH_GET_SECURITY_EVENTS](), 'INVALID_ARGUMENT');
   });
+
+  it('validates max_count before authentication', async () => {
+    let called = false;
+    globalThis.fetch = async () => { called = true; throw new Error('must not fetch'); };
+    await expectGrpcError(
+      () => rpcdef(buildCtx({ max_count: 10001 }))[PATH_GET_SECURITY_EVENTS](),
+      'INVALID_ARGUMENT',
+    );
+    assert.equal(called, false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -358,6 +368,20 @@ describe('GetSecurityEvents API response errors', () => {
     await expectGrpcError(() => rpcdef(buildCtx())[PATH_GET_SECURITY_EVENTS](), 'UNAVAILABLE');
   });
 
+  it('does not expose an upstream HTTP response body', async () => {
+    let callNum = 0;
+    globalThis.fetch = async () => {
+      callNum++;
+      if (callNum === 1) return { ok: true, status: 200, text: async () => AUTH_TOKEN_BODY, headers: makeHeaders() };
+      return { ok: false, status: 400, text: async () => 'secret token and internal stack', headers: makeHeaders() };
+    };
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_SECURITY_EVENTS](), (error) => {
+      assert.equal(error.legacyCode, 'FAILED_PRECONDITION');
+      assert.doesNotMatch(error.message, /secret token|internal stack/);
+      return true;
+    });
+  });
+
   it('throws PERMISSION_DENIED on data code 13', async () => {
     const apiResp = { code: 13, message: 'Permission denied!' };
     globalThis.fetch = makeSeqFetch(apiResp);
@@ -388,6 +412,34 @@ describe('GetSecurityEvents API response errors', () => {
   it('throws UNKNOWN on non-JSON data response', async () => {
     globalThis.fetch = makeSeqFetch('not json at all', 200);
     await expectGrpcError(() => rpcdef(buildCtx())[PATH_GET_SECURITY_EVENTS](), 'UNKNOWN');
+  });
+
+  it('uses AbortSignal timeout and maps the real undici timeout shape', async () => {
+    let init;
+    globalThis.fetch = async (_url, requestInit) => {
+      init = requestInit;
+      const error = new Error('The operation was aborted');
+      error.name = 'AbortError';
+      error.cause = new DOMException('The operation timed out', 'TimeoutError');
+      throw error;
+    };
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_SECURITY_EVENTS](), /UNAVAILABLE: upstream request timed out after 5000ms/);
+    assert.ok(init.signal instanceof AbortSignal);
+  });
+
+  it('uses an undici dispatcher only when TLS verification is disabled', async () => {
+    let init;
+    let callNum = 0;
+    globalThis.fetch = async (_url, requestInit) => {
+      init = requestInit;
+      callNum++;
+      const text = callNum === 1
+        ? AUTH_TOKEN_BODY
+        : JSON.stringify({ code: 0, data: { items: [], count: 0 } });
+      return { ok: true, status: 200, text: async () => text, headers: makeHeaders() };
+    };
+    await rpcdef(buildCtx({}, { skipTlsVerify: true }))[PATH_GET_SECURITY_EVENTS]();
+    assert.ok(init.dispatcher);
   });
 });
 

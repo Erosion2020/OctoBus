@@ -312,6 +312,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "nsfocus-waf-v6-0-7": {
+    entryFile: "../nsfocus__waf_v6-0-7/bin/nsfocus-waf-v6-0-7.js",
+    serviceModule: "../nsfocus__waf_v6-0-7/src/service.js",
+  },
   "zhizhangyi-mbs": {
     entryFile: "../zhizhangyi__mbs/bin/zhizhangyi-mbs.js",
     serviceModule: "../zhizhangyi__mbs/src/service.js",

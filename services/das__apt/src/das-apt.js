@@ -179,7 +179,9 @@ const httpsPostJson = (url, init, timeoutMs) => new Promise((resolve, reject) =>
   });
 
   req.on('timeout', () => {
-    req.destroy(new Error('request timed out'));
+    const err = new Error('request timed out');
+    err.name = 'AbortError';
+    req.destroy(err);
   });
   req.on('error', reject);
   req.write(body);

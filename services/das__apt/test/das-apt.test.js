@@ -397,6 +397,31 @@ test('fetch timeout maps to DEADLINE_EXCEEDED without leaking request data', asy
   });
 });
 
+test('HTTPS timeout with skipTlsVerify maps to DEADLINE_EXCEEDED', async (t) => {
+  const originalRequest = https.request;
+  t.after(() => {
+    https.request = originalRequest;
+  });
+
+  https.request = () => {
+    const req = new EventEmitter();
+    req.write = () => {};
+    req.end = () => req.emit('timeout');
+    req.destroy = (err) => req.emit('error', err);
+    return req;
+  };
+
+  await assert.rejects(() => handlers[METHOD_LIST_ASSETS_FULL](buildCtx({
+    config: { skipTlsVerify: true },
+  })), (err) => {
+    assert.equal(err.code, grpcStatus.DEADLINE_EXCEEDED);
+    assert.equal(err.legacyCode, 'DEADLINE_EXCEEDED');
+    assert.match(err.message, /upstream request timed out/);
+    assert.doesNotMatch(err.message, /request timed out.*request timed out/);
+    return true;
+  });
+});
+
 test('business failure maps to FAILED_PRECONDITION', async () => {
   globalThis.fetch = async () => mockRes(200, { code: 9, message: '业务失败' });
 

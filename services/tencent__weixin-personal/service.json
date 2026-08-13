@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-weixin-personal",
+  "displayName": "Tencent Weixin iLink Bot",
+  "description": "Experimental Tencent Weixin iLink Bot adapter compatible with the official OpenClaw channel v2.4.6 wire protocol.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_weixin_personal.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/StartLogin": {
+          "name": "start-login",
+          "description": "Start iLink Bot QR authorization."
+        },
+        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/WaitLogin": {
+          "name": "wait-login",
+          "description": "Wait for iLink Bot QR authorization without returning the token."
+        },
+        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/FetchUpdates": {
+          "name": "fetch-updates",
+          "description": "Long-poll iLink getupdates once and return normalized messages."
+        },
+        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/SendText": {
+          "name": "send-text",
+          "description": "Send a text message through Tencent iLink Bot API."
+        }
+      }
+    }
+  }
+}

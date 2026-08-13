@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "loginBaseUrl": { "type": "string", "format": "uri", "default": "https://ilinkai.weixin.qq.com" },
+    "baseUrl": { "type": "string", "format": "uri", "default": "https://ilinkai.weixin.qq.com" },
+    "accountId": { "type": "string" },
+    "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 120000, "default": 15000 },
+    "longPollTimeoutMs": { "type": "integer", "minimum": 1, "maximum": 120000, "default": 35000 },
+    "botType": { "type": "string", "default": "3" },
+    "botAgent": { "type": "string", "default": "OctoBus/0.1.0" },
+    "routeTag": { "type": "string" }
+  }
+}

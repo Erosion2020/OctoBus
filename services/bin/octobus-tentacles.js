@@ -316,6 +316,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "tencent-weixin-personal": {
+    entryFile: "../tencent__weixin-personal/bin/tencent-weixin-personal.js",
+    serviceModule: "../tencent__weixin-personal/src/service.js",
+  },
   "tencent-qq-chat": {
     entryFile: "../tencent__qq-chat/bin/tencent-qq-chat.js",
     serviceModule: "../tencent__qq-chat/src/service.js",

@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package Tencent_WeixinPersonal;
+
+option go_package = "miner/grpc-service/Tencent_WeixinPersonal";
+
+// Tencent_WeixinPersonal wraps the experimental Tencent iLink Bot API.
+service Tencent_WeixinPersonal {
+  rpc SendText(SendTextRequest) returns (SendTextResponse) {}
+  rpc StartLogin(StartLoginRequest) returns (StartLoginResponse) {}
+  rpc WaitLogin(WaitLoginRequest) returns (WaitLoginResponse) {}
+  rpc FetchUpdates(FetchUpdatesRequest) returns (FetchUpdatesResponse) {}
+}
+
+message StartLoginRequest {
+  string bot_type = 1;
+  bool force_refresh = 2;
+}
+
+message StartLoginResponse {
+  string session_key = 1;
+  string qrcode = 2;
+  string qrcode_url = 3;
+  string message = 4;
+  int32 http_status = 5;
+  string http_body = 6;
+  int32 expires_in_seconds = 7;
+}
+
+message WaitLoginRequest {
+  string session_key = 1;
+  int32 timeout_ms = 2;
+  string verify_code = 3;
+}
+
+message WaitLoginResponse {
+  bool connected = 1;
+  bool already_connected = 2;
+  string account_id = 3;
+  reserved 4 to 6; // Credentials stay inside the service instance.
+  string status = 7;
+  string message = 8;
+  int32 http_status = 9;
+  string http_body = 10;
+}
+
+message FetchUpdatesRequest {
+  string cursor = 1;
+  int32 timeout_ms = 2;
+  string account_id = 3;
+}
+
+message FetchUpdatesResponse {
+  int32 ret = 1;
+  int32 errcode = 2;
+  string errmsg = 3;
+  string cursor = 4;
+  int32 longpolling_timeout_ms = 5;
+  repeated NormalizedMessage messages = 6;
+  int32 http_status = 7;
+  string http_body = 8;
+}
+
+
+message SendTextRequest {
+  string to_user_id = 1;
+  string message = 2;
+  string context_token = 3;
+  string account_id = 4;
+  string client_id = 5;
+  string run_id = 6;
+}
+
+message SendTextResponse {
+  bool success = 1;
+  int32 ret = 2;
+  int32 errcode = 3;
+  string errmsg = 4;
+  string client_id = 5;
+  int32 http_status = 6;
+  string http_body = 7;
+}
+
+message NormalizedMessage {
+  string local_id = 1;
+  int64 seq = 2;
+  int64 message_id = 3;
+  string from_user_id = 4;
+  string to_user_id = 5;
+  string client_id = 6;
+  string session_id = 7;
+  string group_id = 8;
+  int32 message_type = 9;
+  int32 message_state = 10;
+  int64 create_time_ms = 11;
+  int64 update_time_ms = 12;
+  string context_token = 13;
+  string run_id = 14;
+  string text = 15;
+  string raw_json = 16;
+}

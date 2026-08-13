@@ -188,9 +188,9 @@ export function rpcdef(ctx) {
     if (maxCount < 1 || maxCount > MAX_COUNT) {
       throw err('INVALID_ARGUMENT', `max_count must be in [1, ${MAX_COUNT}]`);
     }
+    if (fromTime >= toTime) throw err('INVALID_ARGUMENT', 'from_time must be less than to_time');
 
     const token = await getToken(base);
-    if (fromTime >= toTime) throw err('INVALID_ARGUMENT', 'from_time must be less than to_time');
 
     const params = new URLSearchParams({ token, fromActionTime: String(fromTime), toActionTime: String(toTime), maxCount: String(maxCount) });
     const res = await doFetch(`${base}${apiPath}?${params.toString()}`);

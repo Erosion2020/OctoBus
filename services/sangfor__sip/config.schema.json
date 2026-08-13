@@ -1,7 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["host"],
+  "anyOf": [
+    { "required": ["host"] },
+    { "required": ["baseUrl"] },
+    { "required": ["restBaseUrl"] }
+  ],
   "additionalProperties": true,
   "properties": {
     "host": {
@@ -13,6 +17,11 @@
       "type": "string",
       "format": "uri",
       "description": "Alias for host."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Legacy alias for host."
     },
     "timeoutMs": {
       "type": "integer",

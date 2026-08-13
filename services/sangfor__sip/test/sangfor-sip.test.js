@@ -314,9 +314,11 @@ describe('GetSecurityEvents validation', () => {
   });
 
   it('throws INVALID_ARGUMENT when from_time >= to_time', async () => {
-    globalThis.fetch = makeSeqFetch({});
+    let called = false;
+    globalThis.fetch = async () => { called = true; throw new Error('must not fetch'); };
     const ctx = buildCtx({ from_time: 1700003600, to_time: 1700000000 });
     await expectGrpcError(() => rpcdef(ctx)[PATH_GET_SECURITY_EVENTS](), 'INVALID_ARGUMENT');
+    assert.equal(called, false);
   });
 
   it('validates max_count before authentication', async () => {

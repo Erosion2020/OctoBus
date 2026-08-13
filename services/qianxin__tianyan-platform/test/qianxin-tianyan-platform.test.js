@@ -886,6 +886,29 @@ describe('AddFlowWhitelist success', () => {
     assert.equal(capturedMethod, 'POST');
   });
 
+  it('serializes wrapper timestamp strings as decimal strings', async () => {
+    let capturedBody = '';
+    let call = 0;
+    globalThis.fetch = async (_url, init) => {
+      call++;
+      if (call === 1) return { ok: true, status: 200, text: async () => AUTH_TOKEN_BODY, headers: makeHeaders({}) };
+      if (call === 2) return { ok: true, status: 200, text: async () => AUTH_HTML_BODY, headers: makeHeaders({ 'set-cookie': 'session=s' }) };
+      capturedBody = init?.body ?? '';
+      return { ok: true, status: 200, text: async () => JSON.stringify({ data: { id: 'wl-time' } }), headers: makeHeaders({}) };
+    };
+    const ctx = buildCtx({
+      req: {
+        alarm_sips: { value: '1.2.3.4' },
+        start_time: { value: '1700000000000' },
+        end_time: { value: '1700086400000' },
+      },
+    });
+    await rpcdef(ctx)[PATH_ADD_FLOW_WHITELIST]();
+    const body = JSON.parse(capturedBody);
+    assert.equal(body.start_time, '1700000000000');
+    assert.equal(body.end_time, '1700086400000');
+  });
+
   it('handlers key works', async () => {
     globalThis.fetch = makeSeqFetch({ data: {} });
     const r = await handlers[KEY_ADD_FLOW_WHITELIST]({ ioc: { value: 'bad.dll' } }, buildCtx());
@@ -900,6 +923,29 @@ describe('AddFlowWhitelist validation errors', () => {
     globalThis.fetch = makeSeqFetch({});
     const ctx = buildCtx({ req: {} });
     await assert.rejects(rpcdef(ctx)[PATH_ADD_FLOW_WHITELIST](), /INVALID_ARGUMENT/);
+  });
+
+  for (const [name, value] of [
+    ['non-numeric', 'not-a-timestamp'],
+    ['negative', '-1'],
+    ['blank', ''],
+    ['whitespace-padded', ' 1700000000000 '],
+  ]) {
+    it(`rejects ${name} wrapper timestamps`, async () => {
+      globalThis.fetch = makeSeqFetch({});
+      const ctx = buildCtx({
+        req: { alarm_sips: { value: '1.2.3.4' }, start_time: { value } },
+      });
+      await assert.rejects(rpcdef(ctx)[PATH_ADD_FLOW_WHITELIST](), /INVALID_ARGUMENT: start_time must be epoch milliseconds/);
+    });
+  }
+
+  it('rejects an invalid end_time independently', async () => {
+    globalThis.fetch = makeSeqFetch({});
+    const ctx = buildCtx({
+      req: { alarm_sips: { value: '1.2.3.4' }, end_time: { value: 'tomorrow' } },
+    });
+    await assert.rejects(rpcdef(ctx)[PATH_ADD_FLOW_WHITELIST](), /INVALID_ARGUMENT: end_time must be epoch milliseconds/);
   });
 });
 

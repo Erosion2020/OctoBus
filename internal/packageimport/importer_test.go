@@ -1506,7 +1506,7 @@ func TestNpmPackOutputAndErrorBranches(t *testing.T) {
 case "$NPM_FAKE_MODE" in
 empty) exit 0 ;;
 fail) printf 'boom\n' >&2; exit 7 ;;
-*) printf 'notice\npkg-1.0.0.tgz\n' ;;
+*) printf 'notice before\npkg-1.0.0.tgz\nnpm notice\n' ;;
 esac
 `, 0o755)
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))

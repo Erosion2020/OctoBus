@@ -999,9 +999,9 @@ func (i *Importer) packNPM(ctx context.Context, spec, staging string) (preparedS
 	if err := cmd.Run(); err != nil {
 		return preparedSource{}, fmt.Errorf("npm pack %s: %w: %s", spec, err, strings.TrimSpace(out.String()))
 	}
-	packed := strings.TrimSpace(out.String())
-	if idx := strings.LastIndex(packed, "\n"); idx >= 0 {
-		packed = strings.TrimSpace(packed[idx+1:])
+	packed, err := npmPackArtifactName(out.String())
+	if err != nil {
+		return preparedSource{}, err
 	}
 	artifactPath := filepath.Join(staging, filepath.Base(packed))
 	packageDir := filepath.Join(staging, "package")
@@ -1453,14 +1453,22 @@ func npmPack(ctx context.Context, dir, destination string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	packed := strings.TrimSpace(out)
-	if idx := strings.LastIndex(packed, "\n"); idx >= 0 {
-		packed = strings.TrimSpace(packed[idx+1:])
-	}
-	if packed == "" {
-		return "", errors.New("npm pack did not produce a .tgz artifact")
+	packed, err := npmPackArtifactName(out)
+	if err != nil {
+		return "", err
 	}
 	return filepath.Join(destination, filepath.Base(packed)), nil
+}
+
+func npmPackArtifactName(output string) (string, error) {
+	lines := strings.Split(output, "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		line := strings.TrimSpace(lines[index])
+		if strings.HasSuffix(strings.ToLower(line), ".tgz") {
+			return filepath.Base(line), nil
+		}
+	}
+	return "", errors.New("npm pack did not produce a .tgz artifact")
 }
 
 func runNPM(ctx context.Context, dir string, args []string) error {

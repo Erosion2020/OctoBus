@@ -8,6 +8,7 @@
   "properties": {
     "host": {
       "type": "string",
+      "format": "uri",
       "description": "DAS APT platform base URL, for example https://192.168.x.x."
     },
     "timeoutMs": {

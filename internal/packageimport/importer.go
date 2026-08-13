@@ -1464,7 +1464,7 @@ func npmPackArtifactName(output string) (string, error) {
 	lines := strings.Split(output, "\n")
 	for index := len(lines) - 1; index >= 0; index-- {
 		line := strings.TrimSpace(lines[index])
-		if strings.HasSuffix(strings.ToLower(line), ".tgz") {
+		if !strings.ContainsAny(line, " \t") && strings.HasSuffix(strings.ToLower(line), ".tgz") {
 			return filepath.Base(line), nil
 		}
 	}

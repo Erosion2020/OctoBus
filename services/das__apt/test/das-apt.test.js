@@ -355,6 +355,9 @@ test('upstream HTTP failures map to Connect errors', async (t) => {
         assert.equal(err.code, scenario.code);
         assert.equal(err.legacyCode, scenario.legacyCode);
         scenario.assertDetails?.(err);
+        assert.equal(Object.hasOwn(err.details, 'http_response_body'), false);
+        assert.equal(Object.hasOwn(err.details, 'upstream'), false);
+        assert.equal(Object.hasOwn(err.details, 'request_body'), false);
         return true;
       });
     });
@@ -369,7 +372,27 @@ test('network failure maps to UNAVAILABLE', async () => {
   await assert.rejects(() => handlers[METHOD_LIST_ASSETS_FULL](buildCtx()), (err) => {
     assert.equal(err.code, grpcStatus.UNAVAILABLE);
     assert.equal(err.legacyCode, 'UNAVAILABLE');
-    assert.match(err.message, /connection refused/);
+    assert.match(err.message, /failed to connect to upstream/);
+    assert.doesNotMatch(err.message, /connection refused/);
+    assert.deepEqual(err.details, { operation: 'ListAssets', path: '/openapi/asset/list' });
+    return true;
+  });
+});
+
+test('fetch timeout maps to DEADLINE_EXCEEDED without leaking request data', async () => {
+  globalThis.fetch = async () => {
+    const err = new Error('request containing sensitive data timed out');
+    err.name = 'AbortError';
+    throw err;
+  };
+
+  await assert.rejects(() => handlers[METHOD_LIST_ASSETS_FULL](buildCtx({
+    req: { ip: '192.0.2.42' },
+  })), (err) => {
+    assert.equal(err.code, grpcStatus.DEADLINE_EXCEEDED);
+    assert.equal(err.legacyCode, 'DEADLINE_EXCEEDED');
+    assert.doesNotMatch(err.message, /sensitive|192\.0\.2\.42/);
+    assert.equal(Object.hasOwn(err.details, 'request_body'), false);
     return true;
   });
 });
@@ -380,7 +403,9 @@ test('business failure maps to FAILED_PRECONDITION', async () => {
   await assert.rejects(() => handlers[METHOD_LIST_ASSETS_FULL](buildCtx()), (err) => {
     assert.equal(err.code, grpcStatus.FAILED_PRECONDITION);
     assert.equal(err.legacyCode, 'FAILED_PRECONDITION');
-    assert.match(err.message, /业务失败/);
+    assert.match(err.message, /business error 9/);
+    assert.equal(err.details.upstream_code, '9');
+    assert.equal(Object.hasOwn(err.details, 'upstream'), false);
     return true;
   });
 });
@@ -391,7 +416,8 @@ test('parse failure maps to UNKNOWN', async () => {
   await assert.rejects(() => handlers[METHOD_LIST_ASSETS_FULL](buildCtx()), (err) => {
     assert.equal(err.code, grpcStatus.UNKNOWN);
     assert.equal(err.legacyCode, 'UNKNOWN');
-    assert.equal(err.details.http_response_body, 'not-json');
+    assert.doesNotMatch(err.message, /not-json/);
+    assert.equal(Object.hasOwn(err.details, 'http_response_body'), false);
     return true;
   });
 });

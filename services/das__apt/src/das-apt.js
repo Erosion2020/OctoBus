@@ -208,44 +208,38 @@ const parseJsonResponse = async (res, context) => {
       json: text ? JSON.parse(text) : {},
     };
   } catch {
-    throw errorWithCode('UNKNOWN', `upstream returned non-JSON response: ${text}`, {
+    throw errorWithCode('UNKNOWN', 'upstream returned a non-JSON response', {
       ...context,
       http_status_code: res.status,
-      http_response_body: text,
     });
   }
 };
 
-const upstreamMessage = (json, fallback) => trimString(firstDefined(json?.message, json?.msg, fallback));
-
-const throwForHttpStatus = (res, json, text, context) => {
+const throwForHttpStatus = (res, context) => {
   if (res.ok) return;
 
   const details = {
     ...context,
     http_status_code: res.status,
-    http_response_body: text,
-    upstream: json,
   };
-  const message = upstreamMessage(json, text);
 
   if (res.status === 401) {
-    throw errorWithCode('UNAUTHENTICATED', message || 'upstream authentication failed', details);
+    throw errorWithCode('UNAUTHENTICATED', 'upstream authentication failed', details);
   }
   if (res.status === 403) {
-    throw errorWithCode('PERMISSION_DENIED', message || 'upstream permission denied', details);
+    throw errorWithCode('PERMISSION_DENIED', 'upstream permission denied', details);
   }
   if (res.status === 404) {
-    throw errorWithCode('NOT_FOUND', message || 'upstream resource not found', details);
+    throw errorWithCode('NOT_FOUND', 'upstream resource not found', details);
   }
   if (res.status === 408 || res.status === 504) {
-    throw errorWithCode('DEADLINE_EXCEEDED', message || 'upstream request timed out', details);
+    throw errorWithCode('DEADLINE_EXCEEDED', 'upstream request timed out', details);
   }
   if (res.status >= 500) {
-    throw errorWithCode('UNAVAILABLE', message || 'upstream service unavailable', details);
+    throw errorWithCode('UNAVAILABLE', 'upstream service unavailable', details);
   }
 
-  throw errorWithCode('FAILED_PRECONDITION', message || `upstream returned HTTP ${res.status}`, details);
+  throw errorWithCode('FAILED_PRECONDITION', `upstream returned HTTP ${res.status}`, details);
 };
 
 const throwForBusinessStatus = (json, context) => {
@@ -256,20 +250,20 @@ const throwForBusinessStatus = (json, context) => {
   const ok = normalized === 0 || normalized === 200;
   if (ok) return;
 
-  const message = upstreamMessage(json, `upstream returned code ${code}`);
-  const details = { ...context, upstream: json };
+  const message = trimString(firstDefined(json?.message, json?.msg));
+  const details = { ...context, upstream_code: coerceString(code) };
 
   if (/token|登录|认证|鉴权/i.test(message) || normalized === 400 || normalized === 401) {
-    throw errorWithCode('UNAUTHENTICATED', message, details);
+    throw errorWithCode('UNAUTHENTICATED', 'upstream authentication failed', details);
   }
   if (normalized === 403) {
-    throw errorWithCode('PERMISSION_DENIED', message, details);
+    throw errorWithCode('PERMISSION_DENIED', 'upstream permission denied', details);
   }
   if (normalized === 404) {
-    throw errorWithCode('NOT_FOUND', message, details);
+    throw errorWithCode('NOT_FOUND', 'upstream resource not found', details);
   }
 
-  throw errorWithCode('FAILED_PRECONDITION', message, details);
+  throw errorWithCode('FAILED_PRECONDITION', `upstream returned business error ${code}`, details);
 };
 
 const fetchOpenApiJson = async (ctx, path, body, operation) => {
@@ -284,17 +278,20 @@ const fetchOpenApiJson = async (ctx, path, body, operation) => {
     },
     body: JSON.stringify(body),
   };
-  const context = { operation, path, request_body: body };
+  const context = { operation, path };
 
   let res;
   try {
     res = await sendJsonRequest(url, init, config);
   } catch (err) {
-    throw errorWithCode('UNAVAILABLE', `failed to connect to upstream: ${err.message}`, context);
+    if (err?.name === 'AbortError') {
+      throw errorWithCode('DEADLINE_EXCEEDED', 'upstream request timed out', context);
+    }
+    throw errorWithCode('UNAVAILABLE', 'failed to connect to upstream', context);
   }
 
   const { text, json } = await parseJsonResponse(res, context);
-  throwForHttpStatus(res, json, text, context);
+  throwForHttpStatus(res, context);
   throwForBusinessStatus(json, context);
   return json;
 };
@@ -360,8 +357,6 @@ export const handleGetAsset = async (req = {}, ctx = {}) => {
   if (!asset) {
     throw errorWithCode('NOT_FOUND', `asset not found: ${body.ip}`, {
       operation: 'GetAsset',
-      ip: body.ip,
-      upstream: raw,
     });
   }
   return {

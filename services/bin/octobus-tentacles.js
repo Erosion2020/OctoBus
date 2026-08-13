@@ -36,6 +36,9 @@ const services = {
   "cloudatlas": {
     entryFile: "../chaitin__cloudatlas/bin/cloudatlas.js",
     serviceModule: "../chaitin__cloudatlas/src/service.js",
+  "aliyun-sas-vulnerability-management": {
+    entryFile: "../aliyun__sas-vulnerability-management/bin/aliyun-sas-vulnerability-management.js",
+    serviceModule: "../aliyun__sas-vulnerability-management/src/service.js",
   },
   "das-apt": {
     entryFile: "../das__apt/bin/das-apt.js",

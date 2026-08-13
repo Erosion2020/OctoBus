@@ -1046,6 +1046,37 @@ describe('timeoutMs', () => {
     const ctx = buildCtx({ limits: { timeoutMs: 5 }, req: { offset: 1, limit: 5 } });
     await assert.rejects(rpcdef(ctx)[PATH_LIST_ALARMS](), /UNAVAILABLE: upstream request timed out/);
   });
+
+  it('keeps the timeout active while reading the response body', async () => {
+    globalThis.fetch = async (_url, init) => ({
+      ok: true,
+      status: 200,
+      headers: makeHeaders({}),
+      text: () => new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        }, { once: true });
+      }),
+    });
+    const ctx = buildCtx({ limits: { timeoutMs: 5 }, req: { offset: 1, limit: 5 } });
+    await assert.rejects(rpcdef(ctx)[PATH_LIST_ALARMS](), /UNAVAILABLE: upstream request timed out/);
+  });
+});
+
+test('network errors retain a safe diagnostic category', async () => {
+  globalThis.fetch = async () => {
+    const error = new Error('fetch failed');
+    error.cause = Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:443'), { code: 'ECONNREFUSED' });
+    throw error;
+  };
+  const ctx = buildCtx({ req: { offset: 1, limit: 10 } });
+  await assert.rejects(rpcdef(ctx)[PATH_LIST_ALARMS](), (error) => {
+    assert.match(error.message, /upstream request failed: ECONNREFUSED/);
+    assert.doesNotMatch(error.message, /10\.0\.0\.1/);
+    return true;
+  });
 });
 
 test('HTTP errors do not expose the upstream response body', async () => {

@@ -134,9 +134,8 @@ message AddFlowWhitelistRequest {
   google.protobuf.StringValue ioc = 3;
   google.protobuf.StringValue threat_name = 4;
   google.protobuf.StringValue type_chain = 5;
-  // Epoch milliseconds encoded as decimal strings. StringValue keeps the
-  // Connect JSON representation portable across JavaScript clients, where
-  // protobuf int64 values cannot be represented safely as JSON numbers.
+  // This service has not been released yet. Use decimal strings in its initial
+  // public schema so Connect clients do not lose precision for epoch millis.
   google.protobuf.StringValue end_time = 6;
   google.protobuf.StringValue start_time = 7;
 }

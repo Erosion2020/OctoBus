@@ -4,6 +4,7 @@ import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 const DEFAULT_TIMEOUT_MS = 15000;
 let insecureDispatcherPromise;
+const responseCleanup = Symbol('responseCleanup');
 
 const PKG = 'QIANXIN_TianYan_Platform';
 const P = `/${PKG}.${PKG}/`;
@@ -37,6 +38,15 @@ const err = (code, msg) => {
   const e = new GrpcError(grpcCodeFor(code), `${code}: ${msg}`);
   e.legacyCode = code;
   return e;
+};
+
+const networkFailureReason = (error) => {
+  const source = String(error?.cause?.code || error?.code || error?.cause?.message || error?.message || '');
+  const known = source.match(/\b(E(?:AI_AGAIN|CONNREFUSED|CONNRESET|HOSTUNREACH|NETUNREACH|TIMEDOUT)|ENOTFOUND)\b/i)?.[1];
+  if (known) return `: ${known.toUpperCase()}`;
+  if (/certificate|self[- ]signed|unable to verify/i.test(source)) return ': TLS certificate verification failed';
+  if (/dns|getaddrinfo/i.test(source)) return ': DNS lookup failed';
+  return '';
 };
 
 const toValue = (val) => {
@@ -123,23 +133,37 @@ export function rpcdef(ctx) {
           connect: { rejectUnauthorized: false },
         })))
         : undefined;
-      return await fetch(url, {
+      const response = await fetch(url, {
         ...init,
         signal: controller.signal,
         ...(dispatcher ? { dispatcher } : {}),
       });
+      response[responseCleanup] = () => clearTimeout(timer);
+      return response;
     } catch (e) {
+      clearTimeout(timer);
       const message = e?.name === 'AbortError' || controller.signal.aborted
         ? 'upstream request timed out'
-        : 'upstream request failed';
+        : `upstream request failed${networkFailureReason(e)}`;
+      throw err('UNAVAILABLE', message);
+    }
+  };
+
+  const readText = async (res) => {
+    try {
+      return await res.text();
+    } catch (e) {
+      const message = e?.name === 'AbortError'
+        ? 'upstream request timed out'
+        : `upstream response failed${networkFailureReason(e)}`;
       throw err('UNAVAILABLE', message);
     } finally {
-      clearTimeout(timer);
+      res[responseCleanup]?.();
     }
   };
 
   const readJson = async (res) => {
-    const text = await res.text();
+    const text = await readText(res);
     if (!res.ok) {
       const s = res.status;
       if (s === 401 || s === 403) throw err('PERMISSION_DENIED', `upstream http ${s}`);
@@ -188,7 +212,7 @@ export function rpcdef(ctx) {
       method: 'GET',
     });
 
-    const html = await res2.text();
+    const html = await readText(res2);
     if (!res2.ok) {
       const s = res2.status;
       if (s === 401 || s === 403) throw err('PERMISSION_DENIED', `auth step2 failed: http ${s}`);
@@ -543,11 +567,15 @@ export function rpcdef(ctx) {
 
     const endTime = req?.end_time;
     if (endTime != null) {
-      body.end_time = typeof endTime === 'object' && 'value' in endTime ? endTime.value : endTime;
+      const value = typeof endTime === 'object' && 'value' in endTime ? endTime.value : endTime;
+      if (!/^\d+$/.test(String(value))) throw err('INVALID_ARGUMENT', 'end_time must be epoch milliseconds');
+      body.end_time = String(value);
     }
     const startTime = req?.start_time;
     if (startTime != null) {
-      body.start_time = typeof startTime === 'object' && 'value' in startTime ? startTime.value : startTime;
+      const value = typeof startTime === 'object' && 'value' in startTime ? startTime.value : startTime;
+      if (!/^\d+$/.test(String(value))) throw err('INVALID_ARGUMENT', 'start_time must be epoch milliseconds');
+      body.start_time = String(value);
     }
 
     const res = await doFetch(`${base}/system/rule_cfg/white_list_flow?csrf_token=${encodeURIComponent(csrfToken)}`, {

@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "ailpha-platform": {
+    entryFile: "../ailpha__platform/bin/ailpha-platform.js",
+    serviceModule: "../ailpha__platform/src/service.js",
+  },
   "aliyun-waf3": {
     entryFile: "../aliyun__waf3/bin/aliyun-waf3.js",
     serviceModule: "../aliyun__waf3/src/service.js",

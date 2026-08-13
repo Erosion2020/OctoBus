@@ -5,6 +5,7 @@
   "type": "module",
   "bin": {
     "octobus-tentacles": "bin/octobus-tentacles.js",
+    "ailpha-platform": "bin/ailpha-platform.js",
     "aliyun-waf3": "bin/aliyun-waf3.js",
     "alibaba-cloud-simple-application-server-firewall": "bin/alibaba-cloud-simple-application-server-firewall.js",
     "aliyun-cloudfw": "bin/aliyun-cloudfw.js",
@@ -76,6 +77,7 @@
     "opencti": "bin/opencti.js"
   },
   "files": [
+    "bin/ailpha-platform.js",
     "bin/aliyun-waf3.js",
     "bin/alibaba-cloud-simple-application-server-firewall.js",
     "bin/aliyun-cloudfw.js",
@@ -215,6 +217,7 @@
     "wangsu__label-ip",
     "scripts",
     "aliyun__waf3",
+    "ailpha__platform",
     "bin/octobus-tentacles.js"
   ],
   "scripts": {

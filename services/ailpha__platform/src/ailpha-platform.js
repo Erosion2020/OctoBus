@@ -232,7 +232,15 @@ export function rpcdef(ctx) {
       throw errorWithCode('UNAVAILABLE', 'upstream request failed');
     }
 
-    const text = await res.text();
+    let text;
+    try {
+      text = await res.text();
+    } catch (e) {
+      if (isTimeoutError(e)) {
+        throw errorWithCode('DEADLINE_EXCEEDED', `request timed out after ${timeoutMs}ms`);
+      }
+      throw errorWithCode('UNAVAILABLE', 'failed to read upstream response');
+    }
     if (!res.ok) {
       let code;
       if (res.status === 401) code = 'UNAUTHENTICATED';

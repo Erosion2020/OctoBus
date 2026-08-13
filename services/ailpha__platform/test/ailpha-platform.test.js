@@ -239,6 +239,31 @@ test('timeout uses AbortSignal and maps TimeoutError to DEADLINE_EXCEEDED', asyn
   await assert.rejects((await loadRpc({}))[listAlarmsPath](), /DEADLINE_EXCEEDED.*timed out after/);
 });
 
+test('response body read errors preserve the gRPC error contract', async () => {
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    async text() {
+      const e = new Error('The operation was aborted');
+      e.name = 'AbortError';
+      e.cause = new DOMException('The operation timed out', 'TimeoutError');
+      throw e;
+    },
+  });
+  await assert.rejects((await loadRpc({}))[listAlarmsPath](), /DEADLINE_EXCEEDED.*timed out after/);
+
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    async text() { throw new Error('socket reset with sensitive detail'); },
+  });
+  await assert.rejects((await loadRpc({}))[listAlarmsPath](), (error) => {
+    assert.match(error.message, /UNAVAILABLE.*failed to read upstream response/);
+    assert.doesNotMatch(error.message, /sensitive detail/);
+    return true;
+  });
+});
+
 test('skipTlsVerify passes an undici dispatcher instead of non-standard options', async () => {
   let init;
   setFetch((u, i) => { init = i; return ok({ $page: 0, $size: 0, total: 0, data: [] }); });

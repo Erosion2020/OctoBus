@@ -468,20 +468,17 @@ function numberSample(name, schema) {
     return 443;
   }
   const min = schema.minimum ?? schema.exclusiveMinimum;
-  const base = typeof min === "number"
+  const lowerBound = typeof min === "number"
     ? min + (schema.exclusiveMinimum !== undefined ? 1 : 0)
     : 1;
-  const isStartTime = /^(starttime|start_time|fromtime|from_time)$/.test(lower);
-  const isEndTime = /^(endtime|end_time|totime|to_time)$/.test(lower);
+  const maximum = schema.maximum ?? schema.exclusiveMaximum;
+  const upper = typeof maximum === "number"
+    ? maximum - (schema.exclusiveMaximum !== undefined ? 1 : 0)
+    : Number.POSITIVE_INFINITY;
+  const base = Math.min(lowerBound, upper);
+  const isEndTime = /^(end|to)(?:time|_time|timestamp|_timestamp|ts|_ts|date|_date)(?:_ms)?$/.test(lower);
   if (isEndTime) {
-    const maximum = schema.maximum ?? schema.exclusiveMaximum;
-    const upper = typeof maximum === "number"
-      ? maximum - (schema.exclusiveMaximum !== undefined ? 1 : 0)
-      : Number.POSITIVE_INFINITY;
     return Math.min(base + 1, upper);
-  }
-  if (isStartTime || typeof min === "number") {
-    return base;
   }
   return base;
 }

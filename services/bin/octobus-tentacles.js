@@ -29,6 +29,10 @@ const services = {
     entryFile: "../chaitin__cloudatlas/bin/cloudatlas.js",
     serviceModule: "../chaitin__cloudatlas/src/service.js",
   },
+  "das-apt": {
+    entryFile: "../das__apt/bin/das-apt.js",
+    serviceModule: "../das__apt/src/service.js",
+  },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
     serviceModule: "../das__gateway_v3/src/service.js",

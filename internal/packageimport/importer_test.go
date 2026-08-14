@@ -1506,7 +1506,9 @@ func TestNpmPackOutputAndErrorBranches(t *testing.T) {
 case "$NPM_FAKE_MODE" in
 empty) exit 0 ;;
 fail) printf 'boom\n' >&2; exit 7 ;;
-*) printf 'notice before\npkg-1.0.0.tgz\nnpm notice filename: misleading.tgz\nnpm notice\n' ;;
+invalid) printf 'not json\n' ;;
+missing) printf '[{}]\n' ;;
+*) printf 'npm notice filename: misleading.tgz\n' >&2; printf '[{"filename":"pkg-1.0.0.tgz"}]\n' ;;
 esac
 `, 0o755)
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -1524,6 +1526,16 @@ esac
 	t.Setenv("NPM_FAKE_MODE", "empty")
 	if _, err := npmPack(context.Background(), t.TempDir(), filepath.Join(t.TempDir(), "packed")); err == nil || !strings.Contains(err.Error(), "did not produce") {
 		t.Fatalf("expected empty npm pack output error, got %v", err)
+	}
+
+	t.Setenv("NPM_FAKE_MODE", "invalid")
+	if _, err := npmPack(context.Background(), t.TempDir(), filepath.Join(t.TempDir(), "packed")); err == nil || !strings.Contains(err.Error(), "parse npm pack JSON output") {
+		t.Fatalf("expected invalid npm pack JSON error, got %v", err)
+	}
+
+	t.Setenv("NPM_FAKE_MODE", "missing")
+	if _, err := npmPack(context.Background(), t.TempDir(), filepath.Join(t.TempDir(), "packed")); err == nil || !strings.Contains(err.Error(), "did not produce") {
+		t.Fatalf("expected missing npm pack filename error, got %v", err)
 	}
 
 	t.Setenv("NPM_FAKE_MODE", "fail")

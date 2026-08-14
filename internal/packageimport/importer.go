@@ -992,14 +992,14 @@ func skipDiscoveryDir(name string) bool {
 }
 
 func (i *Importer) packNPM(ctx context.Context, spec, staging string) (preparedSource, error) {
-	cmd := exec.CommandContext(ctx, "npm", "pack", spec, "--pack-destination", staging)
-	var out strings.Builder
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	cmd := exec.CommandContext(ctx, "npm", "pack", spec, "--pack-destination", staging, "--json")
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return preparedSource{}, fmt.Errorf("npm pack %s: %w: %s", spec, err, strings.TrimSpace(out.String()))
+		return preparedSource{}, fmt.Errorf("npm pack %s: %w: %s", spec, err, strings.TrimSpace(stderr.String()))
 	}
-	packed, err := npmPackArtifactName(out.String())
+	packed, err := npmPackArtifactName(stdout.String())
 	if err != nil {
 		return preparedSource{}, err
 	}
@@ -1449,11 +1449,15 @@ func npmPack(ctx context.Context, dir, destination string) (string, error) {
 	if err := os.MkdirAll(destination, 0o755); err != nil {
 		return "", err
 	}
-	out, err := runNPMOutput(ctx, dir, []string{"pack", "--pack-destination", destination})
-	if err != nil {
-		return "", err
+	cmd := exec.CommandContext(ctx, "npm", "pack", "--pack-destination", destination, "--json")
+	cmd.Dir = dir
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("npm pack: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
-	packed, err := npmPackArtifactName(out)
+	packed, err := npmPackArtifactName(stdout.String())
 	if err != nil {
 		return "", err
 	}
@@ -1461,14 +1465,19 @@ func npmPack(ctx context.Context, dir, destination string) (string, error) {
 }
 
 func npmPackArtifactName(output string) (string, error) {
-	lines := strings.Split(output, "\n")
-	for index := len(lines) - 1; index >= 0; index-- {
-		line := strings.TrimSpace(lines[index])
-		if !strings.ContainsAny(line, " \t") && strings.HasSuffix(strings.ToLower(line), ".tgz") {
-			return filepath.Base(line), nil
-		}
+	if strings.TrimSpace(output) == "" {
+		return "", errors.New("npm pack did not produce a .tgz artifact")
 	}
-	return "", errors.New("npm pack did not produce a .tgz artifact")
+	var packed []struct {
+		Filename string `json:"filename"`
+	}
+	if err := json.Unmarshal([]byte(output), &packed); err != nil {
+		return "", fmt.Errorf("parse npm pack JSON output: %w", err)
+	}
+	if len(packed) != 1 || !strings.HasSuffix(strings.ToLower(packed[0].Filename), ".tgz") {
+		return "", errors.New("npm pack did not produce a .tgz artifact")
+	}
+	return filepath.Base(packed[0].Filename), nil
 }
 
 func runNPM(ctx context.Context, dir string, args []string) error {

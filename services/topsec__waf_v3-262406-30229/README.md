@@ -22,13 +22,15 @@ octobus service import topsec-waf-v3-262406-30229 ./topsec__waf_v3-262406-30229
 
 ```json
 {
-  "waf_base_url": "https://<waf-management-ip>:8443"
+  "waf_base_url": "https://<waf-management-ip>:8443",
+  "tls_verify": true
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `waf_base_url` | string | yes | WAF management interface base URL |
+| `tls_verify` | boolean | no | Verify the WAF TLS certificate (defaults to `true`). Set to `false` only for a trusted self-signed appliance certificate. |
 
 ```json
 {
@@ -128,7 +130,7 @@ Chinese-language messages are returned for common error scenarios:
 
 ## Risk & Limitations
 
-- **TLS 证书**：`rejectUnauthorized=false` 允许自签证书，生产环境建议部署外围 TLS 代理。
+- **TLS 证书**：默认验证 WAF TLS 证书。仅在已验证的自签名设备上显式设置 `tls_verify=false`；生产环境建议部署受信任证书或外围 TLS 代理。
 - **Token 传输**：auth token 作为 URL 查询参数传输，依赖 HTTPS 保护传输层安全。
 - **Session 缓存**：authId、secret、token pool 以明文缓存在 Node.js 进程内存中，实例重启后需重新 Login。
 - **单实例限制**：token pool 不跨实例共享，同一 WAF 不应被多个 OctoBus 实例同时操作（会导致 token 竞争）。

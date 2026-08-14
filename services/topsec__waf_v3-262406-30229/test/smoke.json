@@ -1,0 +1,5 @@
+{
+  "method": "waf.v1.WafAuthService/Login",
+  "request": {},
+  "expectUpstream": true
+}

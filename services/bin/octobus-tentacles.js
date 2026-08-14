@@ -361,6 +361,10 @@ const services = {
     entryFile: "../topsec__waf_v3-2294-20238/bin/topsec-waf-v3-2294-20238.js",
     serviceModule: "../topsec__waf_v3-2294-20238/src/service.js",
   },
+  "topsec-waf-v3-262406-30229": {
+    entryFile: "../topsec__waf_v3-262406-30229/bin/topsec-waf-v3-262406-30229.js",
+    serviceModule: "../topsec__waf_v3-262406-30229/src/service.js",
+  },
   "topsec-fw-2u": {
     entryFile: "../topsec__fw-2u/bin/topsec-fw-2u.js",
     serviceModule: "../topsec__fw-2u/src/service.js",

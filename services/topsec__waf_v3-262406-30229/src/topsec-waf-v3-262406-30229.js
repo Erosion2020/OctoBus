@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import http from 'node:http';
 import https from 'node:https';
 
 // ── WAF 3.0 Protocol ───────────────────────────────────────────────────
@@ -22,7 +23,11 @@ function aesEncrypt(plaintext) {
 
 function md5(s) { return crypto.createHash("md5").update(s).digest("hex"); }
 
-function httpsGet(urlStr, cookie, tlsVerify = false) {
+function requestFor(urlStr) {
+  return new URL(urlStr).protocol === "https:" ? https.request : http.request;
+}
+
+function httpsGet(urlStr, cookie, tlsVerify = true) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const opts = {
@@ -30,14 +35,14 @@ function httpsGet(urlStr, cookie, tlsVerify = false) {
       method: "GET", rejectUnauthorized: tlsVerify, timeout: 30_000,
     };
     if (cookie) opts.headers = { Cookie: `SESSID=${cookie}` };
-    const req = https.request(opts, (res) => {
+    const req = requestFor(urlStr)(opts, (res) => {
       const chunks = [];
       res.on("data", (c) => chunks.push(c));
       res.on("end", () => {
         const raw = Buffer.concat(chunks);
         const sc = res.headers["set-cookie"];
         const sid = Array.isArray(sc) ? (sc[0] || "").match(/SESSID=([^;]+)/)?.[1] || "" : "";
-        resolve({ status: res.statusCode, body: raw.toString("utf8"), raw, sid });
+        resolve({ status: res.statusCode, body: raw.toString("utf8"), raw, sid, headers: res.headers });
       });
       res.on("error", reject);
     });
@@ -47,7 +52,7 @@ function httpsGet(urlStr, cookie, tlsVerify = false) {
   });
 }
 
-function httpsPost(urlStr, body, cookie, tlsVerify = false) {
+function httpsPost(urlStr, body, cookie, tlsVerify = true) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const opts = {
@@ -56,7 +61,7 @@ function httpsPost(urlStr, body, cookie, tlsVerify = false) {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     };
     if (cookie) opts.headers.Cookie = `SESSID=${cookie}`;
-    const req = https.request(opts, (res) => {
+    const req = requestFor(urlStr)(opts, (res) => {
       const chunks = [];
       res.on("data", (c) => chunks.push(c));
       res.on("end", () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") }));
@@ -91,8 +96,9 @@ function parseWafResponse(raw, tokens) {
   if (raw.length >= 20) {
     const tok = raw.slice(2, 18);
     if (/^[0-9a-fA-F]{16}$/.test(tok)) {
+      const parsed = JSON.parse(raw.slice(20));
       tokens.push(tok);
-      return JSON.parse(raw.slice(20));
+      return parsed;
     }
   }
   return JSON.parse(raw);
@@ -193,7 +199,7 @@ async function login(ctx) {
 
   const encPwd = aesEncrypt(password);
   const encLen = aesEncrypt(String(password.length));
-  const tlsVerify = config.tls_verify === true;
+  const tlsVerify = config.tls_verify !== false;
   const url = wafUrl(wafBaseUrl, `/home/restLogin/?name=${encodeURIComponent(username)}&password=${encodeURIComponent(encPwd)}&ngtosAuth=${encodeURIComponent(encLen)}`);
 
   try {
@@ -211,7 +217,7 @@ async function login(ctx) {
     const wafSecret = data.secret || "";
     const tokens = Array.isArray(data.tokens) ? [...data.tokens] : [];
 
-    setSession(wafBaseUrl, { sid, authId, secret: wafSecret, tokens, tlsVerify: config.tls_verify === true });
+    setSession(wafBaseUrl, { sid, authId, secret: wafSecret, tokens, tlsVerify });
 
     return { success: true, sessionId: sid, authId, secret: wafSecret, tokens, message: "ok" };
   } catch (err) {

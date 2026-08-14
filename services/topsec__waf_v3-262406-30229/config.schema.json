@@ -7,8 +7,8 @@
     },
     "tls_verify": {
       "type": "boolean",
-      "description": "Enable TLS certificate verification. Default false for self-signed WAF certificates.",
-      "default": false
+      "description": "Verify the WAF TLS certificate. Disable only for a trusted self-signed appliance certificate.",
+      "default": true
     }
   },
   "required": ["waf_base_url"]
